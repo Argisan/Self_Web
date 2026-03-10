@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argi Studio | Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/login.css">
+</head>
+<body>
+  <canvas id="particles" aria-hidden="true"></canvas>
+
+  <main class="auth-shell">
+    <section class="auth-card">
+      <div class="brand">
+        <img src="assets/images/logo.png" alt="Argi logo" class="brand-logo">
+        <div>
+          <p class="eyebrow">Portfolio Access</p>
+          <h1>Argi Studio</h1>
+        </div>
+      </div>
+
+      <div class="intro-copy">
+        <h2>Welcome back</h2>
+        <p>Sign in to view the portfolio experience, profile sections, and interactive demos.</p>
+      </div>
+
+      <div id="sessionNotice" class="session-notice is-hidden" aria-live="polite">
+        <p id="sessionText"></p>
+        <div class="session-actions">
+          <a href="home.html" class="secondary-btn">Continue to portfolio</a>
+          <button type="button" id="clearSessionBtn" class="ghost-btn">Clear saved session</button>
+        </div>
+      </div>
+
+      <form id="loginForm" class="login-form" autocomplete="off">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="password-row">
+            <input type="password" id="password" name="password" required>
+            <button type="button" id="togglePassword" class="ghost-btn small-btn" aria-label="Show password">Show</button>
+          </div>
+        </div>
+
+        <label class="remember-row" for="rememberMe">
+          <input type="checkbox" id="rememberMe" name="rememberMe">
+          <span>Remember me on this device</span>
+        </label>
+
+        <button type="submit" class="primary-btn" id="loginBtn">Login</button>
+        <p class="message" id="message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <aside class="auth-panel">
+      <p class="eyebrow">Preview</p>
+      <h2>Immersive visual portfolio with interactive sections.</h2>
+      <p class="panel-copy">
+        Built around a modern black, radiant purple, and silver theme with responsive layout,
+        smoother interactions, and cleaner code structure.
+      </p>
+      <ul class="feature-list">
+        <li>Responsive layout for desktop, tablet, and mobile</li>
+        <li>Interactive cards, snake game, and live guestbook</li>
+        <li>Animated feather background on the home page</li>
+      </ul>
+      <div class="credentials">
+        <span>Demo login</span>
+        <strong>argi / password</strong>
+      </div>
+    </aside>
+  </main>
+
+  <audio id="successSound" src="assets/audio/success.mp3" preload="auto"></audio>
+
+  <script src="assets/js/login.js"></script>
+</body>
+</html>

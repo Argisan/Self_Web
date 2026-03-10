@@ -1,0 +1,7 @@
+{
+  "name": "argi-studio-website",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  }
+}
