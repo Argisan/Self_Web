@@ -1,0 +1,10 @@
+# Runtime data (generated at server startup)
+data/admin-config.json
+data/licenses.json
+
+# Node.js
+node_modules/
+
+# Logs
+*.log
+server.log
