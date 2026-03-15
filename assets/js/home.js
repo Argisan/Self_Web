@@ -264,19 +264,54 @@
     setCookieStatus("Generating NFToken…", "Contacting nftoken.site, please wait.", "");
 
     try {
-      const response = await fetch("https://nftoken.site/v1/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          netflixId: payload.netflixId,
-          secureNetflixId: payload.secureNetflixId,
-          nfvdid: payload.nfvdid,
-        }),
-      });
+      // Try the server-side proxy first (avoids CORS and uses the registered API key).
+      // Fall back to the direct URL when the proxy is unavailable (e.g. static hosting).
+      let data;
+      let usedProxy = false;
 
-      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      try {
+        const proxyResponse = await fetch("/api/nftoken", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            netflixId: payload.netflixId,
+            secureNetflixId: payload.secureNetflixId,
+            nfvdid: payload.nfvdid,
+          }),
+        });
 
-      const data = await response.json();
+        if (proxyResponse.status === 404) {
+          // Proxy not available (static hosting) — fall through to direct call
+        } else if (!proxyResponse.ok) {
+          const errData = await proxyResponse.json().catch(() => ({}));
+          throw new Error(errData.error || `Proxy returned ${proxyResponse.status}`);
+        } else {
+          data = await proxyResponse.json();
+          usedProxy = true;
+        }
+      } catch (proxyErr) {
+        // fetch() throws TypeError for network failures (e.g. no server running, CORS block).
+        // Any other error type means the proxy responded with an application-level error,
+        // so re-throw it immediately instead of silently falling back to the direct call.
+        if (!(proxyErr instanceof TypeError)) throw proxyErr;
+        // Network / CORS error on proxy — fall through to direct call
+      }
+
+      if (!usedProxy) {
+        const directResponse = await fetch("https://nftoken.site/v1/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            netflixId: payload.netflixId,
+            secureNetflixId: payload.secureNetflixId,
+            nfvdid: payload.nfvdid,
+          }),
+        });
+
+        if (!directResponse.ok) throw new Error(`Server returned ${directResponse.status}`);
+        data = await directResponse.json();
+      }
+
       const token = data.nftoken || data.token || "";
       const magicLink = token ? `https://www.netflix.com/?nftoken=${token}` : "";
 
@@ -297,7 +332,7 @@
       }
     } catch (error) {
       console.error("[NFToken] Generation error:", error);
-      setCookieStatus("Generation failed", "Could not reach nftoken.site. Check your connection or cookies.", "error");
+      setCookieStatus("Generation failed", error.message || "Could not reach nftoken.site. Check your connection or cookies.", "error");
     } finally {
       if (sessionId) {
         fetch("/api/license/release", {

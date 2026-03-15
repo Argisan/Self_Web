@@ -1,4 +1,5 @@
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
@@ -13,6 +14,10 @@ const LICENSES_FILE = path.join(DATA_DIR, "licenses.json");
 const ADMIN_CONFIG_FILE = path.join(DATA_DIR, "admin-config.json");
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const NFTOKEN_API_URL = "https://nftoken.site/v1/api.php";
+// Set NFTOKEN_API_KEY env var in production to keep the key out of source code.
+const NFTOKEN_API_KEY = process.env.NFTOKEN_API_KEY || "NFT_017907d1b1db8a6256c9b33a";
+const MAX_NFTOKEN_REQUEST_BODY_SIZE = 50_000; // 50 KB
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -277,6 +282,91 @@ async function handleLicenseRelease(request, response) {
   sendJson(response, 200, { ok: true });
 }
 
+// ─── NFToken proxy ─────────────────────────────────────────────────────────
+
+function httpsPost(url, payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const parsed = new URL(url);
+    const options = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+        "User-Agent": "ArgiStudio/1.0",
+      },
+      timeout: 20000,
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => { data += chunk; });
+      res.on("end", () => resolve({ status: res.statusCode, body: data }));
+    });
+
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Request timed out")); });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function handleNFToken(request, response) {
+  if (request.method !== "POST") {
+    response.writeHead(405, { Allow: "POST" });
+    response.end("Method Not Allowed");
+    return;
+  }
+
+  let payload;
+  try {
+    const body = await readBody(request, MAX_NFTOKEN_REQUEST_BODY_SIZE);
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(response, 400, { error: "Invalid request body." });
+    return;
+  }
+
+  // Build cookie string from individual values or use a raw cookie string
+  let cookieStr = "";
+  if (typeof payload.cookie === "string" && payload.cookie.trim()) {
+    cookieStr = payload.cookie.trim();
+  } else {
+    const netflixId = String(payload.netflixId || "").trim();
+    const secureNetflixId = String(payload.secureNetflixId || "").trim();
+    const nfvdid = String(payload.nfvdid || "").trim();
+
+    if (!netflixId || !secureNetflixId) {
+      sendJson(response, 400, { error: "netflixId and secureNetflixId are required." });
+      return;
+    }
+
+    cookieStr = `NetflixId=${netflixId}; SecureNetflixId=${secureNetflixId}`;
+    if (nfvdid) cookieStr += `; nfvdid=${nfvdid}`;
+  }
+
+  try {
+    const upstream = await httpsPost(NFTOKEN_API_URL, {
+      key: NFTOKEN_API_KEY,
+      cookie: cookieStr,
+    });
+
+    let upstreamData;
+    try {
+      upstreamData = JSON.parse(upstream.body);
+    } catch {
+      upstreamData = { raw: upstream.body };
+    }
+
+    response.writeHead(upstream.status, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify(upstreamData));
+  } catch (error) {
+    sendJson(response, 502, { error: "Could not reach nftoken.site.", detail: error.message });
+  }
+}
+
 // ─── Admin API ─────────────────────────────────────────────────────────────
 
 async function handleAdmin(request, response, pathname) {
@@ -466,6 +556,11 @@ const server = http.createServer(async (request, response) => {
 
     if (url.pathname === "/api/license/release") {
       await handleLicenseRelease(request, response);
+      return;
+    }
+
+    if (url.pathname === "/api/nftoken") {
+      await handleNFToken(request, response);
       return;
     }
 
