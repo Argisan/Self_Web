@@ -1,0 +1,75 @@
+.lang-stats {
+  margin-top: 0.75rem;
+}
+
+.lang-stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.lang-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.lang-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+}
+
+.lang-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.lang-name {
+  color: var(--text-strong);
+  font-weight: 600;
+  flex: 1;
+}
+
+.lang-percent {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.lang-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.lang-fill {
+  height: 100%;
+  border-radius: 999px;
+  width: 0;
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lang-stats-block {
+  margin-top: 1.4rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border);
+}
+
+.lang-stats-eyebrow {
+  margin: 0 0 0.6rem;
+}
+
+@media (max-width: 768px) {
+  .lang-header {
+    font-size: 0.84rem;
+  }
+
+  .lang-track {
+    height: 7px;
+  }
+}
