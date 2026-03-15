@@ -287,10 +287,10 @@
       </div>
       <div class="field">
         <label for="cookieInput">
-          Cookies — one per line
-          <span style="color:var(--text-muted);font-size:0.75rem;margin-left:6px;">(raw cookie string or NetflixId=…;SecureNetflixId=… format)</span>
+          Cookies — one per line <em>or</em> JSON array
+          <span style="color:var(--text-muted);font-size:0.75rem;margin-left:6px;">(raw string, NetflixId=…;… format, or JSON from Cookie Editor / EditThisCookie)</span>
         </label>
-        <textarea id="cookieInput" placeholder="Paste one cookie string per line…"></textarea>
+        <textarea id="cookieInput" placeholder="Paste cookies here — raw string, name=value; format, or a JSON array exported from Cookie Editor / EditThisCookie…"></textarea>
       </div>
       <div class="actions">
         <button class="btn btn-primary" id="startBtn">▶ Start Checking</button>
@@ -353,6 +353,19 @@
     }
 
     function parseCookies(raw) {
+      const trimmed = raw.trim();
+      // Detect JSON array format (e.g. exported from Cookie Editor / EditThisCookie)
+      if (trimmed.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // The entire JSON array is one set of cookies for one account
+            return [trimmed];
+          }
+        } catch {
+          // Not valid JSON — fall through to line-by-line parsing
+        }
+      }
       return raw
         .split(/\r?\n/)
         .map((line) => line.trim())
@@ -438,6 +451,18 @@
         return;
       }
 
+      // Detect cookie format for user feedback
+      let formatNote = "";
+      const trimmedRaw = raw.trim();
+      if (trimmedRaw.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmedRaw);
+          if (Array.isArray(parsed)) {
+            formatNote = ` — JSON format detected (${parsed.length} cookie${parsed.length !== 1 ? "s" : ""})`;
+          }
+        } catch { /* not JSON, ignore */ }
+      }
+
       // Save license key for convenience
       sessionStorage.setItem(STORAGE_KEY_LICENSE, licenseKey);
 
@@ -448,7 +473,7 @@
       startBtn.disabled = true;
       setProgress(0, cookies.length);
       progressLabel.textContent = "Starting…";
-      setStatus("Sending requests…", "info");
+      setStatus(`Sending requests…${formatNote}`, "info");
 
       let successCount = 0;
       let errorCount = 0;
