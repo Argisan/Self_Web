@@ -104,7 +104,14 @@ function isAdminAuthorized(request, adminConfig) {
   if (!auth.startsWith("Bearer ")) return false;
   const provided = auth.slice(7).trim();
   const hash = crypto.createHash("sha256").update(provided).digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(adminConfig.passwordHash));
+  try {
+    const a = Buffer.from(hash, "hex");
+    const b = Buffer.from(adminConfig.passwordHash, "hex");
+    if (a.length !== 32 || b.length !== 32) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 function expireOldSessions(keys) {
@@ -296,7 +303,16 @@ async function handleAdmin(request, response, pathname) {
     }
     const password = String(payload.password || "");
     const hash = crypto.createHash("sha256").update(password).digest("hex");
-    const valid = crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(adminConfig.passwordHash));
+    let valid = false;
+    try {
+      const a = Buffer.from(hash, "hex");
+      const b = Buffer.from(adminConfig.passwordHash, "hex");
+      if (a.length === 32 && b.length === 32) {
+        valid = crypto.timingSafeEqual(a, b);
+      }
+    } catch {
+      valid = false;
+    }
     if (!valid) {
       sendJson(response, 401, { error: "Invalid admin password." });
       return;

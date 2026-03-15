@@ -304,7 +304,9 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ licenseKey, sessionId }),
-        }).catch(() => {});
+        }).catch((err) => {
+          console.warn("[license] Session release failed:", err);
+        });
       }
     }
   });
