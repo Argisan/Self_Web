@@ -151,37 +151,120 @@
     });
   });
 
-  const styleButtons = document.querySelectorAll(".switch-btn");
-  const stylePreview = document.getElementById("stylePreview");
-  const styleTitle = document.getElementById("styleTitle");
-  const styleCopy = document.getElementById("styleCopy");
-  const styleModes = {
-    midnight: {
-      title: "Midnight editorial",
-      copy: "High contrast, glossy surfaces, and deep purple light.",
-    },
-    neon: {
-      title: "Neon creator mode",
-      copy: "Louder glow, sharper highlights, and a more energetic social feel.",
-    },
-    soft: {
-      title: "Soft aura mode",
-      copy: "Smoother gradients, brighter fog, and a gentler premium vibe.",
-    },
-  };
+  const cookieForm = document.getElementById("cookieForm");
+  const generateNFTokenBtn = document.getElementById("generateNFTokenBtn");
+  const cookieStatusPanel = document.getElementById("cookieStatusPanel");
+  const cookieStatusTitle = document.getElementById("cookieStatusTitle");
+  const cookieStatusCopy = document.getElementById("cookieStatusCopy");
+  const cookieStorageKey = "netflixCookies";
 
-  styleButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const style = button.dataset.style;
-      const mode = styleModes[style];
-      if (!mode) return;
+  function setCookieStatus(title, copy, kind) {
+    if (!cookieStatusPanel) return;
+    cookieStatusTitle.textContent = title;
+    cookieStatusCopy.textContent = copy;
+    cookieStatusPanel.className = "cookie-status-panel";
+    if (kind) cookieStatusPanel.classList.add(`is-${kind}`);
+  }
 
-      styleButtons.forEach((item) => item.classList.toggle("active", item === button));
-      stylePreview.dataset.style = style;
-      styleTitle.textContent = mode.title;
-      styleCopy.textContent = mode.copy;
-    });
+  function loadCookieStatus() {
+    try {
+      const stored = localStorage.getItem(cookieStorageKey);
+      if (stored) {
+        const data = JSON.parse(stored);
+        setCookieStatus(
+          "Cookies stored",
+          `NetflixId and SecureNetflixId are saved locally. Stored at ${data.storedAt || "unknown time"}.`,
+          "success",
+        );
+      }
+    } catch {
+      /* no stored cookies — leave default state */
+    }
+  }
+
+  cookieForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const netflixId = document.getElementById("netflixId")?.value.trim();
+    const secureNetflixId = document.getElementById("secureNetflixId")?.value.trim();
+    const nfvdid = document.getElementById("nfvdid")?.value.trim();
+
+    if (!netflixId || !secureNetflixId) {
+      setCookieStatus("Missing required fields", "Please enter both NetflixId and SecureNetflixId.", "error");
+      return;
+    }
+
+    const payload = {
+      netflixId,
+      secureNetflixId,
+      nfvdid: nfvdid || "",
+      storedAt: new Date().toLocaleString(),
+    };
+
+    try {
+      localStorage.setItem(cookieStorageKey, JSON.stringify(payload));
+      setCookieStatus("Cookies stored", `Saved locally at ${payload.storedAt}. Ready to generate NFToken.`, "success");
+      cookieForm.reset();
+    } catch {
+      setCookieStatus("Storage error", "Could not save cookies to localStorage.", "error");
+    }
   });
+
+  generateNFTokenBtn?.addEventListener("click", async () => {
+    let payload;
+
+    try {
+      const stored = localStorage.getItem(cookieStorageKey);
+      if (!stored) {
+        setCookieStatus("No cookies found", "Store your Netflix cookies first before generating a token.", "error");
+        return;
+      }
+      payload = JSON.parse(stored);
+    } catch {
+      setCookieStatus("Storage error", "Could not read stored cookies.", "error");
+      return;
+    }
+
+    setCookieStatus("Generating NFToken…", "Contacting nftoken.site, please wait.", "");
+
+    try {
+      const response = await fetch("https://nftoken.site/v1/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          netflixId: payload.netflixId,
+          secureNetflixId: payload.secureNetflixId,
+          nfvdid: payload.nfvdid,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+      const data = await response.json();
+      const token = data.nftoken || data.token || "";
+      const magicLink = token ? `https://www.netflix.com/?nftoken=${token}` : "";
+
+      if (token) {
+        setCookieStatus("NFToken generated", "Magic login link ready — click below to open.", "success");
+        if (cookieStatusCopy) {
+          const link = document.createElement("a");
+          link.href = magicLink;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.style.cssText = "color:inherit;text-decoration:underline;";
+          link.textContent = "Open magic login link";
+          cookieStatusCopy.textContent = "";
+          cookieStatusCopy.appendChild(link);
+        }
+      } else {
+        setCookieStatus("Unexpected response", "The server responded but no token was found.", "error");
+      }
+    } catch (error) {
+      console.error("[NFToken] Generation error:", error);
+      setCookieStatus("Generation failed", "Could not reach nftoken.site. Check your connection or cookies.", "error");
+    }
+  });
+
+  loadCookieStatus();
 
   const paletteGrid = document.getElementById("paletteGrid");
   const paletteNote = document.getElementById("paletteNote");
