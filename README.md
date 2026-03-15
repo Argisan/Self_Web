@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Argi Studio Website
 
 Portfolio website built with plain HTML, CSS, JavaScript, and a small Node server for the shared guestbook.
@@ -33,10 +32,6 @@ Portfolio website built with plain HTML, CSS, JavaScript, and a small Node serve
 
 ## Notes
 
-- The guestbook now uses a local backend at `/api/guestbook` and stores posts in `data/guestbook.json`.
+- The guestbook tries the `/api/guestbook` backend first. When the server is not running (e.g. on static hosting), it falls back to localStorage so visitors can still post and read messages on their device.
 - Authentication is still client-side only and intended for demo use.
 - The home page includes a live feather-style animated background tuned for a black, radiant purple, and silver theme.
-=======
-# portfolio_website
-just a surprise
->>>>>>> 8b2be38f132a8db667eded60c3c1b1a49a5269d8

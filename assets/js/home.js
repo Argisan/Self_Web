@@ -305,6 +305,12 @@
   const guestbookList = document.getElementById("guestbookList");
   const guestbookStatus = document.getElementById("guestbookStatus");
   const guestbookEndpoint = "/api/guestbook";
+  const guestbookLocalKey = "guestbookEntries";
+
+  const DEFAULT_ENTRIES = [
+    { name: "Mika", message: "The purple theme looks clean and stylish." },
+    { name: "Jae", message: "The interactive cards make this feel more alive." },
+  ];
 
   function setGuestbookStatus(text, kind = "") {
     guestbookStatus.textContent = text;
@@ -327,6 +333,28 @@
     });
   }
 
+  function getLocalEntries() {
+    try {
+      const stored = localStorage.getItem(guestbookLocalKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+    return [...DEFAULT_ENTRIES];
+  }
+
+  function saveLocalEntries(entries) {
+    try {
+      // Cap at 20 entries to stay within localStorage quota and match the server limit.
+      localStorage.setItem(guestbookLocalKey, JSON.stringify(entries.slice(0, 20)));
+    } catch {
+      /* ignore storage errors */
+    }
+  }
+
   async function loadGuestbook() {
     setGuestbookStatus("Loading messages...");
 
@@ -337,8 +365,9 @@
       renderGuestbook(entries);
       setGuestbookStatus("Guestbook is live.", "success");
     } catch {
-      renderGuestbook([]);
-      setGuestbookStatus("Guestbook server not found. Run the local server instead of opening the HTML file directly.", "error");
+      const entries = getLocalEntries();
+      renderGuestbook(entries);
+      setGuestbookStatus("Messages are saved on this device.", "success");
     }
   }
 
@@ -366,7 +395,12 @@
       guestbookForm.reset();
       setGuestbookStatus("Message posted to the live guestbook.", "success");
     } catch {
-      setGuestbookStatus("Could not post. Make sure the local guestbook server is running.", "error");
+      const entries = getLocalEntries();
+      entries.unshift({ name, message });
+      saveLocalEntries(entries);
+      renderGuestbook(entries);
+      guestbookForm.reset();
+      setGuestbookStatus("Message added. Saved on this device.", "success");
     }
   });
 
