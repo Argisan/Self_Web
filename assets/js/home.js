@@ -226,41 +226,62 @@
 
     setCookieStatus("Generating NFToken…", "Contacting nftoken.site, please wait.", "");
 
-    try {
-      const response = await fetch("https://nftoken.site/v1/generate", {
+    const body = JSON.stringify({
+      netflixId: payload.netflixId,
+      secureNetflixId: payload.secureNetflixId,
+      nfvdid: payload.nfvdid,
+    });
+
+    async function fetchDirect(url) {
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          netflixId: payload.netflixId,
-          secureNetflixId: payload.secureNetflixId,
-          nfvdid: payload.nfvdid,
-        }),
+        body,
       });
-
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      return response.json();
+    }
 
-      const data = await response.json();
-      const token = data.nftoken || data.token || "";
-      const magicLink = token ? `https://www.netflix.com/?nftoken=${token}` : "";
-
-      if (token) {
-        setCookieStatus("NFToken generated", "Magic login link ready — click below to open.", "success");
-        if (cookieStatusCopy) {
-          const link = document.createElement("a");
-          link.href = magicLink;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          link.style.cssText = "color:inherit;text-decoration:underline;";
-          link.textContent = "Open magic login link";
-          cookieStatusCopy.textContent = "";
-          cookieStatusCopy.appendChild(link);
-        }
+    let data;
+    try {
+      // Try the local server proxy first — this avoids browser CORS restrictions.
+      const proxyResponse = await fetch("/api/nftoken", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      if (proxyResponse.status === 404) {
+        // Proxy not available (static hosting); attempt direct call as fallback.
+        data = await fetchDirect("https://nftoken.site/v1/generate");
+      } else if (!proxyResponse.ok) {
+        const err = await proxyResponse.json().catch(() => ({}));
+        throw new Error(err.error || `Proxy returned ${proxyResponse.status}`);
       } else {
-        setCookieStatus("Unexpected response", "The server responded but no token was found.", "error");
+        data = await proxyResponse.json();
       }
     } catch (error) {
       console.error("[NFToken] Generation error:", error);
-      setCookieStatus("Generation failed", "Could not reach nftoken.site. Check your connection or cookies.", "error");
+      const isCors = error instanceof TypeError;
+      const hint = isCors
+        ? "The request was blocked by the browser (CORS). Run the site with node server.js to use the built-in proxy."
+        : `${error.message || "Unknown error"}. Check that nftoken.site is reachable and your cookies are current.`;
+      setCookieStatus("Generation failed", hint, "error");
+      return;
+    }
+
+    const token = data.nftoken || data.token || "";
+    const magicLink = token ? `https://www.netflix.com/?nftoken=${token}` : "";
+
+    if (token) {
+      setCookieStatus("NFToken generated", "Magic login link ready — click below to open.", "success");
+      if (cookieStatusCopy) {
+        const link = document.createElement("a");
+        link.href = magicLink;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.style.cssText = "color:inherit;text-decoration:underline;";
+        link.textContent = "Open magic login link";
+        cookieStatusCopy.textContent = "";
+        cookieStatusCopy.appendChild(link);
+      }
+    } else {
+      setCookieStatus("Unexpected response", "The server responded but no token was found.", "error");
     }
   });
 
@@ -305,6 +326,12 @@
   const guestbookList = document.getElementById("guestbookList");
   const guestbookStatus = document.getElementById("guestbookStatus");
   const guestbookEndpoint = "/api/guestbook";
+  const guestbookLocalKey = "guestbookEntries";
+
+  const DEFAULT_ENTRIES = [
+    { name: "Mika", message: "The purple theme looks clean and stylish." },
+    { name: "Jae", message: "The interactive cards make this feel more alive." },
+  ];
 
   function setGuestbookStatus(text, kind = "") {
     guestbookStatus.textContent = text;
@@ -327,6 +354,28 @@
     });
   }
 
+  function getLocalEntries() {
+    try {
+      const stored = localStorage.getItem(guestbookLocalKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+    return [...DEFAULT_ENTRIES];
+  }
+
+  function saveLocalEntries(entries) {
+    try {
+      // Cap at 20 entries to stay within localStorage quota and match the server limit.
+      localStorage.setItem(guestbookLocalKey, JSON.stringify(entries.slice(0, 20)));
+    } catch {
+      /* ignore storage errors */
+    }
+  }
+
   async function loadGuestbook() {
     setGuestbookStatus("Loading messages...");
 
@@ -337,8 +386,9 @@
       renderGuestbook(entries);
       setGuestbookStatus("Guestbook is live.", "success");
     } catch {
-      renderGuestbook([]);
-      setGuestbookStatus("Guestbook server not found. Run the local server instead of opening the HTML file directly.", "error");
+      const entries = getLocalEntries();
+      renderGuestbook(entries);
+      setGuestbookStatus("Messages are saved on this device.", "success");
     }
   }
 
@@ -366,7 +416,12 @@
       guestbookForm.reset();
       setGuestbookStatus("Message posted to the live guestbook.", "success");
     } catch {
-      setGuestbookStatus("Could not post. Make sure the local guestbook server is running.", "error");
+      const entries = getLocalEntries();
+      entries.unshift({ name, message });
+      saveLocalEntries(entries);
+      renderGuestbook(entries);
+      guestbookForm.reset();
+      setGuestbookStatus("Message added. Saved on this device.", "success");
     }
   });
 
