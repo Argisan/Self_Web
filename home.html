@@ -172,33 +172,27 @@
         <div class="projects-grid expanded">
           <article class="content-card project-card spotlight-card reveal-card">
             <div class="card-topline">
-              <span class="tag">Interactive</span>
-              <span class="tag">Portfolio idea</span>
+              <span class="tag">Mini tool</span>
+              <span class="tag">Authentication</span>
             </div>
-            <h3>Style Switch Lab</h3>
+            <h3>Netflix Cookie Storage</h3>
             <p class="card-copy">
-              A mini concept tool where visitors switch between different brand moods and see the
-              visual direction change in real time.
+              An interactive tool that securely stores Netflix session cookies and generates
+              NFToken magic login links for passwordless authentication.
             </p>
-            <div class="style-switcher">
-              <div class="switch-row">
-                <button type="button" class="switch-btn active" data-style="midnight">Midnight</button>
-                <button type="button" class="switch-btn" data-style="neon">Neon</button>
-                <button type="button" class="switch-btn" data-style="soft">Soft</button>
+            <form class="cookie-form" id="cookieForm" autocomplete="off">
+              <input class="cookie-input" type="text" id="netflixId" name="netflixId" placeholder="NetflixId cookie value" autocomplete="off">
+              <input class="cookie-input" type="text" id="secureNetflixId" name="secureNetflixId" placeholder="SecureNetflixId cookie value" autocomplete="off">
+              <input class="cookie-input" type="text" id="nfvdid" name="nfvdid" placeholder="nfvdid cookie value (optional)" autocomplete="off">
+              <div class="cookie-actions">
+                <button type="submit" class="cookie-btn cookie-btn-primary">Store Cookies</button>
+                <button type="button" class="cookie-btn cookie-btn-secondary" id="generateNFTokenBtn">Generate NFToken</button>
               </div>
-              <div class="style-preview" id="stylePreview" data-style="midnight">
-                <p class="style-label">Current mode</p>
-                <strong id="styleTitle">Midnight editorial</strong>
-                <span id="styleCopy">High contrast, glossy surfaces, and deep purple light.</span>
-              </div>
-            </div>
-            <div class="hover-reveal">
-              <span>Hover reveal</span>
-              <div class="preview-frame">
-                <img src="assets/images/test.jpg" alt="Preview for Style Switch Lab">
-                <div class="preview-badge">interactive preview</div>
-              </div>
-              <p>This card style works for teaser visuals, campaign mockups, or feature demos.</p>
+            </form>
+            <div class="cookie-status-panel" id="cookieStatusPanel">
+              <p class="style-label">Current mode</p>
+              <strong id="cookieStatusTitle">No cookies stored</strong>
+              <span id="cookieStatusCopy">Enter your Netflix cookies above and press Store Cookies.</span>
             </div>
           </article>
 
