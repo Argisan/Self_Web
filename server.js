@@ -372,7 +372,27 @@ async function handleNFToken(request, response) {
   // Build cookie string from individual values or use a raw cookie string
   let cookieStr = "";
   if (typeof payload.cookie === "string" && payload.cookie.trim()) {
-    cookieStr = payload.cookie.trim();
+    const rawCookie = payload.cookie.trim();
+    // Detect JSON array format (e.g. exported from Cookie Editor / EditThisCookie)
+    if (rawCookie.startsWith("[")) {
+      try {
+        const cookieArray = JSON.parse(rawCookie);
+        if (Array.isArray(cookieArray) && cookieArray.length > 0) {
+          cookieStr = cookieArray
+            // Require non-empty name and string value; values are kept as-is because
+            // browser extensions (Cookie Editor, EditThisCookie) already export them
+            // URL-encoded — re-encoding would corrupt the values.
+            .filter((c) => c && typeof c.name === "string" && c.name.length > 0 && typeof c.value === "string")
+            .map((c) => `${c.name}=${c.value}`)
+            .join("; ");
+        }
+      } catch {
+        // Not valid JSON — treat as a raw cookie string
+      }
+    }
+    if (!cookieStr) {
+      cookieStr = rawCookie;
+    }
   } else {
     const netflixId = String(payload.netflixId || "").trim();
     const secureNetflixId = String(payload.secureNetflixId || "").trim();
