@@ -1,4 +1,5 @@
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
@@ -48,6 +49,74 @@ async function writeGuestbook(entries) {
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
+}
+
+function handleNFToken(request, response) {
+  if (request.method !== "POST") {
+    response.writeHead(405, { Allow: "POST" });
+    response.end("Method Not Allowed");
+    return;
+  }
+
+  let body = "";
+  let bodyTooLarge = false;
+  request.on("data", (chunk) => {
+    body += chunk;
+    if (body.length > 10_000) {
+      bodyTooLarge = true;
+      sendJson(response, 413, { error: "Payload too large." });
+      request.destroy();
+    }
+  });
+
+  request.on("end", () => {
+    if (bodyTooLarge) return;
+    let payload;
+    try {
+      payload = JSON.parse(body || "{}");
+    } catch {
+      sendJson(response, 400, { error: "Invalid request body." });
+      return;
+    }
+
+    const postData = JSON.stringify({
+      netflixId: String(payload.netflixId || ""),
+      secureNetflixId: String(payload.secureNetflixId || ""),
+      nfvdid: String(payload.nfvdid || ""),
+    });
+
+    const options = {
+      hostname: "nftoken.site",
+      port: 443,
+      path: "/v1/generate",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(postData),
+      },
+    };
+
+    const upstream = https.request(options, (upstream_response) => {
+      let data = "";
+      upstream_response.on("data", (chunk) => { data += chunk; });
+      upstream_response.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          sendJson(response, upstream_response.statusCode, parsed);
+        } catch {
+          sendJson(response, 502, { error: "Invalid response from nftoken.site." });
+        }
+      });
+    });
+
+    upstream.on("error", (error) => {
+      console.error("[NFToken proxy] Upstream error:", error.message);
+      sendJson(response, 502, { error: "Could not reach nftoken.site." });
+    });
+
+    upstream.write(postData);
+    upstream.end();
+  });
 }
 
 async function handleGuestbook(request, response) {
@@ -120,6 +189,11 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || `${HOST}:${PORT}`}`);
 
   try {
+    if (url.pathname === "/api/nftoken") {
+      handleNFToken(request, response);
+      return;
+    }
+
     if (url.pathname === "/api/guestbook") {
       await handleGuestbook(request, response);
       return;

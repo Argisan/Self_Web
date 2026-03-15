@@ -226,41 +226,62 @@
 
     setCookieStatus("Generating NFToken…", "Contacting nftoken.site, please wait.", "");
 
-    try {
-      const response = await fetch("https://nftoken.site/v1/generate", {
+    const body = JSON.stringify({
+      netflixId: payload.netflixId,
+      secureNetflixId: payload.secureNetflixId,
+      nfvdid: payload.nfvdid,
+    });
+
+    async function fetchDirect(url) {
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          netflixId: payload.netflixId,
-          secureNetflixId: payload.secureNetflixId,
-          nfvdid: payload.nfvdid,
-        }),
+        body,
       });
-
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      return response.json();
+    }
 
-      const data = await response.json();
-      const token = data.nftoken || data.token || "";
-      const magicLink = token ? `https://www.netflix.com/?nftoken=${token}` : "";
-
-      if (token) {
-        setCookieStatus("NFToken generated", "Magic login link ready — click below to open.", "success");
-        if (cookieStatusCopy) {
-          const link = document.createElement("a");
-          link.href = magicLink;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          link.style.cssText = "color:inherit;text-decoration:underline;";
-          link.textContent = "Open magic login link";
-          cookieStatusCopy.textContent = "";
-          cookieStatusCopy.appendChild(link);
-        }
+    let data;
+    try {
+      // Try the local server proxy first — this avoids browser CORS restrictions.
+      const proxyResponse = await fetch("/api/nftoken", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      if (proxyResponse.status === 404) {
+        // Proxy not available (static hosting); attempt direct call as fallback.
+        data = await fetchDirect("https://nftoken.site/v1/generate");
+      } else if (!proxyResponse.ok) {
+        const err = await proxyResponse.json().catch(() => ({}));
+        throw new Error(err.error || `Proxy returned ${proxyResponse.status}`);
       } else {
-        setCookieStatus("Unexpected response", "The server responded but no token was found.", "error");
+        data = await proxyResponse.json();
       }
     } catch (error) {
       console.error("[NFToken] Generation error:", error);
-      setCookieStatus("Generation failed", "Could not reach nftoken.site. Check your connection or cookies.", "error");
+      const isCors = error instanceof TypeError;
+      const hint = isCors
+        ? "The request was blocked by the browser (CORS). Run the site with node server.js to use the built-in proxy."
+        : `${error.message || "Unknown error"}. Check that nftoken.site is reachable and your cookies are current.`;
+      setCookieStatus("Generation failed", hint, "error");
+      return;
+    }
+
+    const token = data.nftoken || data.token || "";
+    const magicLink = token ? `https://www.netflix.com/?nftoken=${token}` : "";
+
+    if (token) {
+      setCookieStatus("NFToken generated", "Magic login link ready — click below to open.", "success");
+      if (cookieStatusCopy) {
+        const link = document.createElement("a");
+        link.href = magicLink;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.style.cssText = "color:inherit;text-decoration:underline;";
+        link.textContent = "Open magic login link";
+        cookieStatusCopy.textContent = "";
+        cookieStatusCopy.appendChild(link);
+      }
+    } else {
+      setCookieStatus("Unexpected response", "The server responded but no token was found.", "error");
     }
   });
 
