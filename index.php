@@ -288,7 +288,7 @@
       <div class="field">
         <label for="cookieInput">
           Cookies — one per line
-          <span style="color:var(--text-muted);font-size:0.75rem;margin-left:6px;">(raw cookie string or NetflixId=…;SecureNetflixId=… format)</span>
+          <span style="color:var(--text-muted);font-size:0.75rem;margin-left:6px;">(JSON array or raw format - e.g., NetflixId=…;SecureNetflixId=… or paste JSON from browser extension)</span>
         </label>
         <textarea id="cookieInput" placeholder="Paste one cookie string per line…"></textarea>
       </div>
@@ -350,6 +350,28 @@
 
     function sleep(ms) {
       return new Promise((r) => setTimeout(r, ms));
+    }
+
+    function parseCookiesFromJson(raw) {
+      // Try to parse as JSON first
+      try {
+        const jsonCookies = JSON.parse(raw);
+        if (Array.isArray(jsonCookies)) {
+          // Convert JSON cookie array to raw format
+          // Extract name and value from each cookie object
+          return jsonCookies
+            .filter(cookie => cookie && typeof cookie.name === "string" && typeof cookie.value === "string")
+            .map(cookie => `${cookie.name}=${cookie.value}`);
+        }
+      } catch (e) {
+        // Not JSON, fall through to normal parsing
+      }
+
+      // Otherwise, parse as raw format (one per line or semicolon-separated)
+      return raw
+        .split(/[;\n]/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
     }
 
     function parseCookies(raw) {
@@ -431,7 +453,7 @@
         return;
       }
 
-      const cookies = parseCookies(raw);
+      const cookies = parseCookiesFromJson(raw);
       if (cookies.length === 0) {
         setStatus("No valid cookie lines found.", "error");
         progressCard.classList.remove("hidden");
