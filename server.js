@@ -26,6 +26,7 @@ const MIME_TYPES = {
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".mp3": "audio/mpeg",
+  ".php": "text/html; charset=utf-8",
   ".png": "image/png",
 };
 
@@ -329,6 +330,45 @@ async function handleNFToken(request, response) {
     return;
   }
 
+  // Optional inline license-key validation.
+  // When a licenseKey is supplied in the request body the endpoint validates it,
+  // creates a session, forwards the request, then releases the session — all in
+  // one round-trip.  When no licenseKey is provided the endpoint proxies without
+  // license validation (home.js handles validate/release via separate endpoints).
+  let managedSession = null;
+  if (payload.licenseKey) {
+    const licenseKey = String(payload.licenseKey).trim();
+    let keys = await readLicenses();
+    keys = expireOldSessions(keys);
+
+    const keyEntry = keys.find((k) => k.key === licenseKey);
+    if (!keyEntry) {
+      sendJson(response, 403, { error: "Invalid license key." });
+      return;
+    }
+    if (!keyEntry.enabled) {
+      sendJson(response, 403, { error: "License key is disabled." });
+      return;
+    }
+    if (keyEntry.expiresAt && new Date(keyEntry.expiresAt) < new Date()) {
+      sendJson(response, 403, { error: "License key has expired." });
+      return;
+    }
+    if (keyEntry.activeSession) {
+      sendJson(response, 409, { error: "This license key is already in use. Try again shortly." });
+      return;
+    }
+
+    const sessionId = generateId();
+    keyEntry.activeSession = {
+      id: sessionId,
+      startedAt: new Date().toISOString(),
+      userAgent: String(request.headers["user-agent"] || "").slice(0, 200),
+    };
+    await writeLicenses(keys);
+    managedSession = { licenseKey, sessionId };
+  }
+
   // Build cookie string from individual values or use a raw cookie string
   let cookieStr = "";
   if (typeof payload.cookie === "string" && payload.cookie.trim()) {
@@ -339,6 +379,7 @@ async function handleNFToken(request, response) {
     const nfvdid = String(payload.nfvdid || "").trim();
 
     if (!netflixId || !secureNetflixId) {
+      if (managedSession) await releaseSessionById(managedSession.licenseKey, managedSession.sessionId);
       sendJson(response, 400, { error: "netflixId and secureNetflixId are required." });
       return;
     }
@@ -364,6 +405,23 @@ async function handleNFToken(request, response) {
     response.end(JSON.stringify(upstreamData));
   } catch (error) {
     sendJson(response, 502, { error: "Could not reach nftoken.site.", detail: error.message });
+  } finally {
+    if (managedSession) {
+      await releaseSessionById(managedSession.licenseKey, managedSession.sessionId);
+    }
+  }
+}
+
+async function releaseSessionById(licenseKey, sessionId) {
+  try {
+    const keys = await readLicenses();
+    const keyEntry = keys.find((k) => k.key === licenseKey);
+    if (keyEntry && keyEntry.activeSession && keyEntry.activeSession.id === sessionId) {
+      keyEntry.activeSession = null;
+      await writeLicenses(keys);
+    }
+  } catch {
+    // Best-effort release; ignore errors
   }
 }
 
