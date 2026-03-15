@@ -157,6 +157,7 @@
   const cookieStatusTitle = document.getElementById("cookieStatusTitle");
   const cookieStatusCopy = document.getElementById("cookieStatusCopy");
   const cookieStorageKey = "netflixCookies";
+  const licenseStorageKey = "nftLicenseKey";
 
   function setCookieStatus(title, copy, kind) {
     if (!cookieStatusPanel) return;
@@ -169,11 +170,13 @@
   function loadCookieStatus() {
     try {
       const stored = localStorage.getItem(cookieStorageKey);
+      const savedKey = localStorage.getItem(licenseStorageKey);
       if (stored) {
         const data = JSON.parse(stored);
+        const keyNote = savedKey ? " License key saved." : " No license key saved.";
         setCookieStatus(
           "Cookies stored",
-          `NetflixId and SecureNetflixId are saved locally. Stored at ${data.storedAt || "unknown time"}.`,
+          `NetflixId and SecureNetflixId are saved locally. Stored at ${data.storedAt || "unknown time"}.${keyNote}`,
           "success",
         );
       }
@@ -184,9 +187,15 @@
 
   cookieForm?.addEventListener("submit", (event) => {
     event.preventDefault();
+    const licenseKey = document.getElementById("licenseKey")?.value.trim();
     const netflixId = document.getElementById("netflixId")?.value.trim();
     const secureNetflixId = document.getElementById("secureNetflixId")?.value.trim();
     const nfvdid = document.getElementById("nfvdid")?.value.trim();
+
+    if (!licenseKey) {
+      setCookieStatus("License key required", "Enter your license key before storing cookies.", "error");
+      return;
+    }
 
     if (!netflixId || !secureNetflixId) {
       setCookieStatus("Missing required fields", "Please enter both NetflixId and SecureNetflixId.", "error");
@@ -202,6 +211,7 @@
 
     try {
       localStorage.setItem(cookieStorageKey, JSON.stringify(payload));
+      localStorage.setItem(licenseStorageKey, licenseKey);
       setCookieStatus("Cookies stored", `Saved locally at ${payload.storedAt}. Ready to generate NFToken.`, "success");
       cookieForm.reset();
     } catch {
@@ -211,6 +221,12 @@
 
   generateNFTokenBtn?.addEventListener("click", async () => {
     let payload;
+    const licenseKey = localStorage.getItem(licenseStorageKey);
+
+    if (!licenseKey) {
+      setCookieStatus("License key required", "Enter your license key and store your cookies first.", "error");
+      return;
+    }
 
     try {
       const stored = localStorage.getItem(cookieStorageKey);
@@ -221,6 +237,27 @@
       payload = JSON.parse(stored);
     } catch {
       setCookieStatus("Storage error", "Could not read stored cookies.", "error");
+      return;
+    }
+
+    setCookieStatus("Validating license key…", "Checking your license, please wait.", "");
+
+    let sessionId;
+    try {
+      const validateResponse = await fetch("/api/license/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenseKey }),
+      });
+
+      const validateData = await validateResponse.json();
+      if (!validateResponse.ok) {
+        setCookieStatus("License key rejected", validateData.error || "Your license key could not be validated.", "error");
+        return;
+      }
+      sessionId = validateData.sessionId;
+    } catch {
+      setCookieStatus("Validation failed", "Could not reach the license server. Make sure the local server is running.", "error");
       return;
     }
 
@@ -261,6 +298,14 @@
     } catch (error) {
       console.error("[NFToken] Generation error:", error);
       setCookieStatus("Generation failed", "Could not reach nftoken.site. Check your connection or cookies.", "error");
+    } finally {
+      if (sessionId) {
+        fetch("/api/license/release", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ licenseKey, sessionId }),
+        }).catch(() => {});
+      }
     }
   });
 

@@ -374,6 +374,24 @@
   margin-top: 0.55rem;
 }
 
+.license-key-row {
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.1rem;
+}
+
+.license-key-input {
+  border-color: rgba(209, 141, 255, 0.32) !important;
+  background: rgba(178, 87, 255, 0.05) !important;
+  font-family: "Space Mono", monospace, inherit;
+  letter-spacing: 0.02em;
+}
+
+.license-key-input:focus {
+  border-color: rgba(209, 141, 255, 0.7) !important;
+  background: rgba(178, 87, 255, 0.1) !important;
+}
+
 .cookie-input {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);

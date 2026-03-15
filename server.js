@@ -2,12 +2,17 @@ const http = require("http");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
+const crypto = require("crypto");
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT || 4173);
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const GUESTBOOK_FILE = path.join(DATA_DIR, "guestbook.json");
+const LICENSES_FILE = path.join(DATA_DIR, "licenses.json");
+const ADMIN_CONFIG_FILE = path.join(DATA_DIR, "admin-config.json");
+
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -44,6 +49,75 @@ async function writeGuestbook(entries) {
   await ensureGuestbookFile();
   await fsp.writeFile(GUESTBOOK_FILE, JSON.stringify(entries.slice(0, 20), null, 2));
 }
+
+// ─── License key storage ─────────────────────────────────────────────────────
+
+async function readLicenses() {
+  try {
+    const raw = await fsp.readFile(LICENSES_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeLicenses(keys) {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  await fsp.writeFile(LICENSES_FILE, JSON.stringify(keys, null, 2));
+}
+
+async function readAdminConfig() {
+  try {
+    const raw = await fsp.readFile(ADMIN_CONFIG_FILE, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function ensureAdminConfig() {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  try {
+    await fsp.access(ADMIN_CONFIG_FILE, fs.constants.F_OK);
+  } catch {
+    const defaultPassword = process.env.ADMIN_PASSWORD || crypto.randomBytes(12).toString("hex");
+    const passwordHash = crypto.createHash("sha256").update(defaultPassword).digest("hex");
+    await fsp.writeFile(ADMIN_CONFIG_FILE, JSON.stringify({ passwordHash }, null, 2));
+    if (!process.env.ADMIN_PASSWORD) {
+      console.log(`\n🔑 Admin panel password (first-time setup): ${defaultPassword}`);
+      console.log("   Store this safely — it will not be shown again.\n");
+    }
+  }
+}
+
+function generateLicenseKey() {
+  return `LK-${crypto.randomBytes(16).toString("hex")}`;
+}
+
+function generateId() {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+function isAdminAuthorized(request, adminConfig) {
+  const auth = request.headers["authorization"] || "";
+  if (!auth.startsWith("Bearer ")) return false;
+  const provided = auth.slice(7).trim();
+  const hash = crypto.createHash("sha256").update(provided).digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(adminConfig.passwordHash));
+}
+
+function expireOldSessions(keys) {
+  const now = Date.now();
+  return keys.map((k) => {
+    if (k.activeSession && now - new Date(k.activeSession.startedAt).getTime() > SESSION_TIMEOUT_MS) {
+      return { ...k, activeSession: null };
+    }
+    return k;
+  });
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
@@ -91,6 +165,250 @@ async function handleGuestbook(request, response) {
   response.end("Method Not Allowed");
 }
 
+// ─── License validation API ────────────────────────────────────────────────
+
+function readBody(request, maxBytes = 10_000) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > maxBytes) {
+        request.destroy();
+        reject(new Error("Payload too large"));
+      }
+    });
+    request.on("end", () => resolve(body));
+    request.on("error", reject);
+  });
+}
+
+async function handleLicenseValidate(request, response) {
+  if (request.method !== "POST") {
+    response.writeHead(405, { Allow: "POST" });
+    response.end("Method Not Allowed");
+    return;
+  }
+
+  let payload;
+  try {
+    const body = await readBody(request);
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(response, 400, { error: "Invalid request body." });
+    return;
+  }
+
+  const licenseKey = String(payload.licenseKey || "").trim();
+  if (!licenseKey) {
+    sendJson(response, 400, { error: "licenseKey is required." });
+    return;
+  }
+
+  let keys = await readLicenses();
+  keys = expireOldSessions(keys);
+
+  const keyEntry = keys.find((k) => k.key === licenseKey);
+  if (!keyEntry) {
+    sendJson(response, 403, { error: "Invalid license key." });
+    return;
+  }
+  if (!keyEntry.enabled) {
+    sendJson(response, 403, { error: "License key is disabled." });
+    return;
+  }
+  if (keyEntry.expiresAt && new Date(keyEntry.expiresAt) < new Date()) {
+    sendJson(response, 403, { error: "License key has expired." });
+    return;
+  }
+  if (keyEntry.activeSession) {
+    sendJson(response, 409, { error: "This license key is already in use. Try again shortly." });
+    return;
+  }
+
+  const sessionId = generateId();
+  keyEntry.activeSession = {
+    id: sessionId,
+    startedAt: new Date().toISOString(),
+    userAgent: String(request.headers["user-agent"] || "").slice(0, 200),
+  };
+
+  await writeLicenses(keys);
+  sendJson(response, 200, { ok: true, sessionId });
+}
+
+async function handleLicenseRelease(request, response) {
+  if (request.method !== "POST") {
+    response.writeHead(405, { Allow: "POST" });
+    response.end("Method Not Allowed");
+    return;
+  }
+
+  let payload;
+  try {
+    const body = await readBody(request);
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(response, 400, { error: "Invalid request body." });
+    return;
+  }
+
+  const licenseKey = String(payload.licenseKey || "").trim();
+  const sessionId = String(payload.sessionId || "").trim();
+
+  if (!licenseKey || !sessionId) {
+    sendJson(response, 400, { error: "licenseKey and sessionId are required." });
+    return;
+  }
+
+  let keys = await readLicenses();
+  const keyEntry = keys.find((k) => k.key === licenseKey);
+  if (keyEntry && keyEntry.activeSession && keyEntry.activeSession.id === sessionId) {
+    keyEntry.activeSession = null;
+    await writeLicenses(keys);
+  }
+
+  sendJson(response, 200, { ok: true });
+}
+
+// ─── Admin API ─────────────────────────────────────────────────────────────
+
+async function handleAdmin(request, response, pathname) {
+  const adminConfig = await readAdminConfig();
+  if (!adminConfig) {
+    sendJson(response, 500, { error: "Admin configuration not found." });
+    return;
+  }
+
+  // Admin login check
+  if (pathname === "/api/admin/login") {
+    if (request.method !== "POST") {
+      response.writeHead(405, { Allow: "POST" });
+      response.end("Method Not Allowed");
+      return;
+    }
+    let payload;
+    try {
+      const body = await readBody(request);
+      payload = JSON.parse(body || "{}");
+    } catch {
+      sendJson(response, 400, { error: "Invalid request body." });
+      return;
+    }
+    const password = String(payload.password || "");
+    const hash = crypto.createHash("sha256").update(password).digest("hex");
+    const valid = crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(adminConfig.passwordHash));
+    if (!valid) {
+      sendJson(response, 401, { error: "Invalid admin password." });
+      return;
+    }
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (!isAdminAuthorized(request, adminConfig)) {
+    sendJson(response, 401, { error: "Unauthorized." });
+    return;
+  }
+
+  // GET /api/admin/licenses
+  if (pathname === "/api/admin/licenses" && request.method === "GET") {
+    let keys = await readLicenses();
+    keys = expireOldSessions(keys);
+    await writeLicenses(keys);
+    sendJson(response, 200, keys);
+    return;
+  }
+
+  // POST /api/admin/licenses — create new key
+  if (pathname === "/api/admin/licenses" && request.method === "POST") {
+    let payload;
+    try {
+      const body = await readBody(request);
+      payload = JSON.parse(body || "{}");
+    } catch {
+      sendJson(response, 400, { error: "Invalid request body." });
+      return;
+    }
+
+    const label = String(payload.label || "").trim().slice(0, 80);
+    const expiresAt = payload.expiresAt ? String(payload.expiresAt) : null;
+    if (expiresAt && isNaN(Date.parse(expiresAt))) {
+      sendJson(response, 400, { error: "Invalid expiresAt date." });
+      return;
+    }
+
+    const newKey = {
+      id: generateId(),
+      key: generateLicenseKey(),
+      label,
+      createdAt: new Date().toISOString(),
+      expiresAt: expiresAt || null,
+      enabled: true,
+      activeSession: null,
+    };
+
+    const keys = await readLicenses();
+    keys.push(newKey);
+    await writeLicenses(keys);
+    sendJson(response, 201, newKey);
+    return;
+  }
+
+  // PATCH /api/admin/licenses/:id — update (enable/disable, label, expiry)
+  const patchMatch = pathname.match(/^\/api\/admin\/licenses\/([a-f0-9]+)$/);
+  if (patchMatch && request.method === "PATCH") {
+    const id = patchMatch[1];
+    let payload;
+    try {
+      const body = await readBody(request);
+      payload = JSON.parse(body || "{}");
+    } catch {
+      sendJson(response, 400, { error: "Invalid request body." });
+      return;
+    }
+
+    const keys = await readLicenses();
+    const keyEntry = keys.find((k) => k.id === id);
+    if (!keyEntry) {
+      sendJson(response, 404, { error: "License key not found." });
+      return;
+    }
+
+    if (typeof payload.enabled === "boolean") keyEntry.enabled = payload.enabled;
+    if (typeof payload.label === "string") keyEntry.label = payload.label.trim().slice(0, 80);
+    if ("expiresAt" in payload) {
+      const d = payload.expiresAt ? String(payload.expiresAt) : null;
+      if (d && isNaN(Date.parse(d))) {
+        sendJson(response, 400, { error: "Invalid expiresAt date." });
+        return;
+      }
+      keyEntry.expiresAt = d;
+    }
+
+    await writeLicenses(keys);
+    sendJson(response, 200, keyEntry);
+    return;
+  }
+
+  // DELETE /api/admin/licenses/:id
+  const deleteMatch = pathname.match(/^\/api\/admin\/licenses\/([a-f0-9]+)$/);
+  if (deleteMatch && request.method === "DELETE") {
+    const id = deleteMatch[1];
+    let keys = await readLicenses();
+    const before = keys.length;
+    keys = keys.filter((k) => k.id !== id);
+    if (keys.length === before) {
+      sendJson(response, 404, { error: "License key not found." });
+      return;
+    }
+    await writeLicenses(keys);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  sendJson(response, 404, { error: "Not found." });
+}
+
 async function serveStatic(requestPath, response) {
   const normalizedPath = requestPath === "/" ? "/index.html" : requestPath;
   const safePath = path.normalize(normalizedPath).replace(/^(\.\.[/\\])+/, "").replace(/^[/\\]+/, "");
@@ -125,6 +443,21 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (url.pathname === "/api/license/validate") {
+      await handleLicenseValidate(request, response);
+      return;
+    }
+
+    if (url.pathname === "/api/license/release") {
+      await handleLicenseRelease(request, response);
+      return;
+    }
+
+    if (url.pathname.startsWith("/api/admin/")) {
+      await handleAdmin(request, response, url.pathname);
+      return;
+    }
+
     await serveStatic(url.pathname, response);
   } catch (error) {
     sendJson(response, 500, { error: "Server error", detail: error.message });
@@ -132,6 +465,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 ensureGuestbookFile()
+  .then(() => ensureAdminConfig())
   .then(() => {
     server.listen(PORT, HOST, () => {
       console.log(`Argi Studio running at http://localhost:${PORT}`);
@@ -139,6 +473,6 @@ ensureGuestbookFile()
     });
   })
   .catch((error) => {
-    console.error("Failed to initialize guestbook storage:", error);
+    console.error("Failed to initialize storage:", error);
     process.exit(1);
   });
