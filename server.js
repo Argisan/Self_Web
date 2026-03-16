@@ -499,29 +499,41 @@ async function releaseSessionById(licenseKey, sessionId) {
 
 // ─── Netflix Cookie Validation ─────────────────────────────────────────────
 
-const NETFLIX_GRAPHQL_URL = process.env.NETFLIX_GRAPHQL_URL || "https://tvos.prod.ftl.netflix.com/graphql";
-const NETFLIX_GRAPHQL_QUERY = `
-  query GetUserData {
-    user {
-      email
-      accountStatus
-      subscription {
-        tier
-        country
-        expiresAt
-      }
-    }
-  }
-`;
+// Multiple Netflix TV GraphQL endpoints to try in order
+const NETFLIX_TV_ENDPOINTS = [
+  "https://tvos.prod.http1.netflix.com/graphql",
+  "https://tvos.prod.cloud.netflix.com/graphql",
+  "https://tvos.prod.ftl.netflix.com/graphql",
+];
 
-function httpsPostNetflix(cookieStr) {
+// Multiple GraphQL query variations to try for each endpoint
+const NETFLIX_GRAPHQL_QUERIES = [
+  {
+    name: "viewer",
+    query: "query { viewer { id email membership } }",
+    extract: (data) => data && data.viewer,
+  },
+  {
+    name: "viewerProfile",
+    query: "query { viewerProfile { id email subscription } }",
+    extract: (data) => data && data.viewerProfile,
+  },
+  {
+    name: "accountProfile",
+    query: "query { accountProfile { id email } }",
+    extract: (data) => data && data.accountProfile,
+  },
+  {
+    name: "getCurrentUser",
+    query: "query { getCurrentUser { id email } }",
+    extract: (data) => data && data.getCurrentUser,
+  },
+];
+
+function httpsPostToEndpoint(endpointUrl, queryStr, cookieStr) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      operationName: "GetUserData",
-      query: NETFLIX_GRAPHQL_QUERY,
-      variables: {},
-    });
-    const parsed = new URL(NETFLIX_GRAPHQL_URL);
+    const body = JSON.stringify({ query: queryStr, variables: {} });
+    const parsed = new URL(endpointUrl);
     const options = {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
@@ -530,7 +542,7 @@ function httpsPostNetflix(cookieStr) {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(body),
         "Cookie": cookieStr,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1",
         "Accept": "application/json",
       },
       timeout: 10000,
@@ -547,6 +559,56 @@ function httpsPostNetflix(cookieStr) {
     req.write(body);
     req.end();
   });
+}
+
+async function attemptGraphQLQueries(cookieStr) {
+  const attempts = [];
+
+  for (const endpoint of NETFLIX_TV_ENDPOINTS) {
+    for (const { name, query, extract } of NETFLIX_GRAPHQL_QUERIES) {
+      try {
+        console.log(`[Netflix TV] Trying endpoint=${endpoint} query=${name}`);
+        const result = await httpsPostToEndpoint(endpoint, query, cookieStr);
+
+        let parsed;
+        try {
+          parsed = JSON.parse(result.body);
+        } catch {
+          const error = `HTTP ${result.status ?? "unknown"}: Invalid JSON response`;
+          console.warn(`[Netflix TV] endpoint=${endpoint} query=${name}: ${error}`);
+          attempts.push({ endpoint, query: name, error });
+          continue;
+        }
+
+        if (parsed.errors && parsed.errors.length > 0) {
+          const error = parsed.errors[0]?.message || "GraphQL error";
+          console.warn(`[Netflix TV] endpoint=${endpoint} query=${name}: ${error}`);
+          attempts.push({ endpoint, query: name, error });
+          continue;
+        }
+
+        const userData = extract(parsed.data);
+        if (userData) {
+          console.log(`[Netflix TV] Success! endpoint=${endpoint} query=${name}`);
+          return { success: true, endpoint, query: name, user: userData };
+        }
+
+        const error = `HTTP ${result.status ?? "unknown"}: No '${name}' field in response data`;
+        console.warn(`[Netflix TV] endpoint=${endpoint} query=${name}: ${error}`);
+        attempts.push({ endpoint, query: name, error });
+      } catch (err) {
+        const error = err.message || "Unknown error";
+        console.warn(`[Netflix TV] endpoint=${endpoint} query=${name}: ${error}`);
+        attempts.push({ endpoint, query: name, error });
+      }
+    }
+  }
+
+  return {
+    success: false,
+    attempts,
+    message: "Could not validate cookies with any endpoint/query combination",
+  };
 }
 
 async function handleValidateNetflix(request, response) {
@@ -606,32 +668,28 @@ async function handleValidateNetflix(request, response) {
   }
 
   try {
-    const upstream = await httpsPostNetflix(payload.cookies.trim());
+    const result = await attemptGraphQLQueries(payload.cookies.trim());
 
-    let upstreamData;
-    try {
-      upstreamData = JSON.parse(upstream.body);
-    } catch {
-      sendJson(response, 502, { status: "ERROR", message: "Invalid response from Netflix" });
-      return;
-    }
-
-    if (upstreamData.errors && upstreamData.errors.length > 0) {
-      sendJson(response, 200, {
-        status: "ERROR",
-        message: upstreamData.errors[0]?.message || "Invalid cookies or Netflix API error",
-      });
-      return;
-    }
-
-    if (upstreamData.data?.user) {
-      const userData = upstreamData.data.user;
+    if (result.success) {
+      const userData = result.user;
+      // Normalize fields across different query shapes:
+      //   viewer        → { id, email, membership }
+      //   viewerProfile → { id, email, subscription: { tier, country, expiresAt } }
+      //   accountProfile / getCurrentUser → { id, email }
+      const email = userData.email || "N/A";
+      const tier = userData.membership || userData.subscription?.tier || "Unknown";
+      const country = userData.subscription?.country || "N/A";
+      const expiresAt = userData.subscription?.expiresAt || "N/A";
       sendJson(response, 200, {
         status: "SUCCESS",
-        x_mail: userData.email || "N/A",
-        x_tier: userData.subscription?.tier || "Unknown",
-        x_loc: userData.subscription?.country || "N/A",
-        x_ren: userData.subscription?.expiresAt || "N/A",
+        success: true,
+        endpoint: result.endpoint,
+        query: result.query,
+        user: userData,
+        x_mail: email,
+        x_tier: tier,
+        x_loc: country,
+        x_ren: expiresAt,
         x_mem: "N/A",
         x_bil: "N/A",
         x_tel: "N/A",
@@ -645,7 +703,9 @@ async function handleValidateNetflix(request, response) {
 
     sendJson(response, 200, {
       status: "ERROR",
-      message: "No user data returned from Netflix",
+      success: false,
+      attempts: result.attempts,
+      message: result.message,
     });
   } catch (error) {
     console.error("[Netflix Validation] Error:", error.message);
