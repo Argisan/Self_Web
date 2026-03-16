@@ -185,27 +185,27 @@
               <span class="tag">Mini tool</span>
               <span class="tag">Authentication</span>
             </div>
-            <h3>Netflix Cookie Storage</h3>
+            <h3>🎬 Netflix Cookie Validator</h3>
             <p class="card-copy">
-              An interactive tool that securely stores Netflix session cookies and generates
-              NFToken magic login links for passwordless authentication.
+              A secure gateway for validating Netflix session cookies with license-protected access
+              and real-time status reporting.
             </p>
-            <form class="cookie-form" id="cookieForm" autocomplete="off">
-              <div class="license-key-row">
-                <input class="cookie-input license-key-input" type="text" id="licenseKey" name="licenseKey" placeholder="License key (e.g. LK-…)" autocomplete="off" spellcheck="false">
+            <div class="netflix-gateway">
+              <div class="netflix-gateway-features">
+                <div class="netflix-feature-card">
+                  <span class="netflix-feature-icon">🔒</span>
+                  <span class="netflix-feature-label">Secure Validation</span>
+                </div>
+                <div class="netflix-feature-card">
+                  <span class="netflix-feature-icon">🪪</span>
+                  <span class="netflix-feature-label">License Protected</span>
+                </div>
+                <div class="netflix-feature-card">
+                  <span class="netflix-feature-icon">⚡</span>
+                  <span class="netflix-feature-label">Real-time Status</span>
+                </div>
               </div>
-              <input class="cookie-input" type="text" id="netflixId" name="netflixId" placeholder="NetflixId cookie value" autocomplete="off">
-              <input class="cookie-input" type="text" id="secureNetflixId" name="secureNetflixId" placeholder="SecureNetflixId cookie value" autocomplete="off">
-              <input class="cookie-input" type="text" id="nfvdid" name="nfvdid" placeholder="nfvdid cookie value (optional)" autocomplete="off">
-              <div class="cookie-actions">
-                <button type="submit" class="cookie-btn cookie-btn-primary">Store Cookies</button>
-                <button type="button" class="cookie-btn cookie-btn-secondary" id="generateNFTokenBtn">Generate NFToken</button>
-              </div>
-            </form>
-            <div class="cookie-status-panel" id="cookieStatusPanel">
-              <p class="style-label">Current mode</p>
-              <strong id="cookieStatusTitle">No cookies stored</strong>
-              <span id="cookieStatusCopy">Enter your Netflix cookies above and press Store Cookies.</span>
+              <a href="index.php" class="cookie-btn cookie-btn-primary netflix-open-btn">Open Cookie Checker →</a>
             </div>
           </article>
 
