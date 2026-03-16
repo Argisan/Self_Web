@@ -425,6 +425,169 @@ async function releaseSessionById(licenseKey, sessionId) {
   }
 }
 
+// ─── Netflix Cookie Validation ─────────────────────────────────────────────
+
+const NETFLIX_GRAPHQL_URL = process.env.NETFLIX_GRAPHQL_URL || "https://tvos.prod.ftl.netflix.com/graphql";
+const NETFLIX_GRAPHQL_QUERY = `
+  query GetUserData {
+    user {
+      email
+      accountStatus
+      subscription {
+        tier
+        country
+        expiresAt
+      }
+    }
+  }
+`;
+
+function httpsPostNetflix(cookieStr) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      operationName: "GetUserData",
+      query: NETFLIX_GRAPHQL_QUERY,
+      variables: {},
+    });
+    const parsed = new URL(NETFLIX_GRAPHQL_URL);
+    const options = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+        "Cookie": cookieStr,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+      },
+      timeout: 10000,
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => { data += chunk; });
+      res.on("end", () => resolve({ status: res.statusCode, body: data }));
+    });
+
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Request timed out")); });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function handleValidateNetflix(request, response) {
+  if (request.method !== "POST") {
+    response.writeHead(405, { Allow: "POST" });
+    response.end("Method Not Allowed");
+    return;
+  }
+
+  let payload;
+  try {
+    const body = await readBody(request, MAX_NFTOKEN_REQUEST_BODY_SIZE);
+    payload = JSON.parse(body || "{}");
+  } catch {
+    sendJson(response, 400, { error: "Invalid request body." });
+    return;
+  }
+
+  if (!payload.cookies || typeof payload.cookies !== "string" || !payload.cookies.trim()) {
+    sendJson(response, 400, { status: "ERROR", message: "Invalid request: cookies must be a non-empty string" });
+    return;
+  }
+
+  // Inline license-key validation (same pattern as handleNFToken)
+  let managedSession = null;
+  if (payload.licenseKey) {
+    const licenseKey = String(payload.licenseKey).trim();
+    let keys = await readLicenses();
+    keys = expireOldSessions(keys);
+
+    const keyEntry = keys.find((k) => k.key === licenseKey);
+    if (!keyEntry) {
+      sendJson(response, 403, { error: "Invalid license key." });
+      return;
+    }
+    if (!keyEntry.enabled) {
+      sendJson(response, 403, { error: "License key is disabled." });
+      return;
+    }
+    if (keyEntry.expiresAt && new Date(keyEntry.expiresAt) < new Date()) {
+      sendJson(response, 403, { error: "License key has expired." });
+      return;
+    }
+    if (keyEntry.activeSession) {
+      sendJson(response, 409, { error: "This license key is already in use. Try again shortly." });
+      return;
+    }
+
+    const sessionId = generateId();
+    keyEntry.activeSession = {
+      id: sessionId,
+      startedAt: new Date().toISOString(),
+      userAgent: String(request.headers["user-agent"] || "").slice(0, 200),
+    };
+    await writeLicenses(keys);
+    managedSession = { licenseKey, sessionId };
+  }
+
+  try {
+    const upstream = await httpsPostNetflix(payload.cookies.trim());
+
+    let upstreamData;
+    try {
+      upstreamData = JSON.parse(upstream.body);
+    } catch {
+      sendJson(response, 502, { status: "ERROR", message: "Invalid response from Netflix" });
+      return;
+    }
+
+    if (upstreamData.errors && upstreamData.errors.length > 0) {
+      sendJson(response, 200, {
+        status: "ERROR",
+        message: upstreamData.errors[0]?.message || "Invalid cookies or Netflix API error",
+      });
+      return;
+    }
+
+    if (upstreamData.data?.user) {
+      const userData = upstreamData.data.user;
+      sendJson(response, 200, {
+        status: "SUCCESS",
+        x_mail: userData.email || "N/A",
+        x_tier: userData.subscription?.tier || "Unknown",
+        x_loc: userData.subscription?.country || "N/A",
+        x_ren: userData.subscription?.expiresAt || "N/A",
+        x_mem: "N/A",
+        x_bil: "N/A",
+        x_tel: "N/A",
+        x_usr: "N/A",
+        x_l1: "#",
+        x_l2: "#",
+        x_l3: "#",
+      });
+      return;
+    }
+
+    sendJson(response, 200, {
+      status: "ERROR",
+      message: "No user data returned from Netflix",
+    });
+  } catch (error) {
+    console.error("[Netflix Validation] Error:", error.message);
+    sendJson(response, 502, {
+      status: "ERROR",
+      message: "Failed to validate cookies: " + error.message,
+    });
+  } finally {
+    if (managedSession) {
+      await releaseSessionById(managedSession.licenseKey, managedSession.sessionId);
+    }
+  }
+}
+
 // ─── Admin API ─────────────────────────────────────────────────────────────
 
 async function handleAdmin(request, response, pathname) {
@@ -619,6 +782,11 @@ const server = http.createServer(async (request, response) => {
 
     if (url.pathname === "/api/nftoken") {
       await handleNFToken(request, response);
+      return;
+    }
+
+    if (url.pathname === "/api/validate-netflix") {
+      await handleValidateNetflix(request, response);
       return;
     }
 
