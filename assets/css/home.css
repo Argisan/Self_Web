@@ -507,7 +507,51 @@
   background: rgba(255, 100, 100, 0.06);
 }
 
+.netflix-gateway {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
 
+.netflix-gateway-features {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.netflix-feature-card {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex: 1;
+  min-width: 0;
+}
+
+.netflix-feature-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.netflix-feature-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.netflix-open-btn {
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+  font-size: 0.85rem;
+  padding: 0.5rem 1.1rem;
+}
 
 .hover-reveal {
   margin-top: 0.75rem;
