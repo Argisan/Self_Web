@@ -34,6 +34,11 @@ const DEFAULT_GUESTBOOK = [
   { name: "Mika", message: "The purple theme looks clean and stylish." },
   { name: "Jae", message: "The interactive cards make this feel more alive." },
 ];
+const MAX_GUESTBOOK_ENTRIES = 20;
+const GUESTBOOK_WINDOW_MS = 60_000;
+const GUESTBOOK_MAX_POSTS_PER_WINDOW = 8;
+const BLOCKED_TERMS = ["http://", "https://", "www.", "discord.gg", "<script", "</script>"];
+const postRateLimits = new Map();
 
 async function ensureGuestbookFile() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
@@ -53,7 +58,7 @@ async function readGuestbook() {
 
 async function writeGuestbook(entries) {
   await ensureGuestbookFile();
-  await fsp.writeFile(GUESTBOOK_FILE, JSON.stringify(entries.slice(0, 20), null, 2));
+  await fsp.writeFile(GUESTBOOK_FILE, JSON.stringify(entries.slice(0, MAX_GUESTBOOK_ENTRIES), null, 2));
 }
 
 // ─── License key storage ─────────────────────────────────────────────────────
@@ -133,8 +138,52 @@ function expireOldSessions(keys) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function sendJson(response, statusCode, payload) {
-  response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
+  });
   response.end(JSON.stringify(payload));
+}
+
+function getClientIp(request) {
+  const forwarded = request.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return request.socket.remoteAddress || "unknown";
+}
+
+function isRateLimited(request) {
+  const ip = getClientIp(request);
+  const now = Date.now();
+  const current = postRateLimits.get(ip);
+
+  if (!current || now > current.resetAt) {
+    postRateLimits.set(ip, { count: 1, resetAt: now + GUESTBOOK_WINDOW_MS });
+    return false;
+  }
+
+  if (current.count >= GUESTBOOK_MAX_POSTS_PER_WINDOW) return true;
+  current.count += 1;
+  return false;
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasBlockedTerm(value) {
+  const lower = value.toLowerCase();
+  return BLOCKED_TERMS.some((term) => lower.includes(term));
+}
+
+function isValidName(value) {
+  return /^[a-zA-Z0-9 .,'-]{2,24}$/.test(value);
 }
 
 async function handleGuestbook(request, response) {
@@ -145,27 +194,50 @@ async function handleGuestbook(request, response) {
   }
 
   if (request.method === "POST") {
+    if (isRateLimited(request)) {
+      sendJson(response, 429, { error: "Too many submissions. Please wait before posting again." });
+      return;
+    }
+
     let body = "";
+    let tooLarge = false;
     request.on("data", (chunk) => {
+      if (tooLarge) return;
       body += chunk;
-      if (body.length > 10_000) request.destroy();
+      if (body.length > 10_000) {
+        tooLarge = true;
+        sendJson(response, 413, { error: "Guestbook payload is too large." });
+        request.destroy();
+      }
     });
 
     request.on("end", async () => {
+      if (tooLarge) return;
+
       try {
         const payload = JSON.parse(body || "{}");
-        const name = String(payload.name || "").trim().slice(0, 24);
-        const message = String(payload.message || "").trim().slice(0, 90);
+        const name = normalizeText(payload.name).slice(0, 24);
+        const message = normalizeText(payload.message).slice(0, 90);
 
-        if (!name || !message) {
-          sendJson(response, 400, { error: "Name and message are required." });
+        if (!name || !message || !isValidName(name)) {
+          sendJson(response, 400, { error: "Please enter a valid name and message." });
+          return;
+        }
+
+        if (message.length < 3) {
+          sendJson(response, 400, { error: "Message is too short." });
+          return;
+        }
+
+        if (hasBlockedTerm(name) || hasBlockedTerm(message)) {
+          sendJson(response, 400, { error: "Links or blocked terms are not allowed in the guestbook." });
           return;
         }
 
         const entries = await readGuestbook();
         entries.unshift({ name, message });
         await writeGuestbook(entries);
-        sendJson(response, 201, entries.slice(0, 20));
+        sendJson(response, 201, entries.slice(0, MAX_GUESTBOOK_ENTRIES));
       } catch {
         sendJson(response, 400, { error: "Invalid guestbook payload." });
       }
@@ -753,7 +825,11 @@ async function serveStatic(requestPath, response) {
     const ext = path.extname(finalPath).toLowerCase();
     const contentType = MIME_TYPES[ext] || "application/octet-stream";
     const content = await fsp.readFile(finalPath);
-    response.writeHead(200, { "Content-Type": contentType });
+    response.writeHead(200, {
+      "Content-Type": contentType,
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": contentType.includes("text/html") ? "no-cache" : "public, max-age=3600",
+    });
     response.end(content);
   } catch {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });

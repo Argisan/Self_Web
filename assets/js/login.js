@@ -12,29 +12,48 @@
   const sessionText = document.getElementById("sessionText");
   const clearSessionBtn = document.getElementById("clearSessionBtn");
   const successSound = document.getElementById("successSound");
+  const errorSound = document.getElementById("errorSound");
+  const loginBtn = document.getElementById("loginBtn");
 
-  function setMessage(text, kind = "") {
-    messageNode.textContent = text;
-    messageNode.className = "message";
-    if (kind) messageNode.classList.add(`is-${kind}`);
+  const memoryStore = {
+    authUser: "",
+    isAuthenticated: "false",
+  };
+
+  function safeGet(storage, key) {
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
   }
 
-  function clearSession() {
-    localStorage.removeItem("authUser");
-    localStorage.removeItem("isAuthenticated");
-    sessionStorage.removeItem("authUser");
-    sessionStorage.removeItem("isAuthenticated");
+  function safeSet(storage, key, value) {
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  function getSavedSession() {
-    const localAuth = localStorage.getItem("isAuthenticated") === "true";
-    const sessionAuth = sessionStorage.getItem("isAuthenticated") === "true";
+  function safeRemove(storage, key) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function getAuthRecord() {
+    const localAuth = safeGet(localStorage, "isAuthenticated") === "true";
+    const sessionAuth = safeGet(sessionStorage, "isAuthenticated") === "true";
 
     if (localAuth) {
       return {
         isAuthenticated: true,
         source: "local",
-        username: localStorage.getItem("authUser") || "argi",
+        username: safeGet(localStorage, "authUser") || "argi",
       };
     }
 
@@ -42,26 +61,86 @@
       return {
         isAuthenticated: true,
         source: "session",
-        username: sessionStorage.getItem("authUser") || "argi",
+        username: safeGet(sessionStorage, "authUser") || "argi",
+      };
+    }
+
+    if (memoryStore.isAuthenticated === "true") {
+      return {
+        isAuthenticated: true,
+        source: "memory",
+        username: memoryStore.authUser || "argi",
       };
     }
 
     return { isAuthenticated: false };
   }
 
-  const savedSession = getSavedSession();
-  if (savedSession.isAuthenticated) {
+  function setMessage(text, kind = "") {
+    if (!messageNode) return;
+    messageNode.textContent = text;
+    messageNode.className = "message";
+    if (kind) messageNode.classList.add(`is-${kind}`);
+  }
+
+  function clearSession() {
+    memoryStore.authUser = "";
+    memoryStore.isAuthenticated = "false";
+    safeRemove(localStorage, "authUser");
+    safeRemove(localStorage, "isAuthenticated");
+    safeRemove(sessionStorage, "authUser");
+    safeRemove(sessionStorage, "isAuthenticated");
+  }
+
+  function saveSession(username, shouldRemember) {
+    memoryStore.authUser = username;
+    memoryStore.isAuthenticated = "true";
+
+    if (shouldRemember) {
+      const okUser = safeSet(localStorage, "authUser", username);
+      const okAuth = safeSet(localStorage, "isAuthenticated", "true");
+      return okUser && okAuth;
+    }
+
+    const okUser = safeSet(sessionStorage, "authUser", username);
+    const okAuth = safeSet(sessionStorage, "isAuthenticated", "true");
+    return okUser && okAuth;
+  }
+
+  function redirectToHome(withTemporaryAuth = false) {
+    // assign keeps back navigation consistent while still being explicit.
+    window.location.assign(withTemporaryAuth ? "home.html?auth=ok" : "home.html");
+  }
+
+  function playSound(sound) {
+    if (!sound) return;
+    try {
+      sound.currentTime = 0;
+      const playPromise = sound.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          // ignore unsupported media / autoplay restrictions
+        });
+      }
+    } catch {
+      // ignore unsupported media / autoplay restrictions
+    }
+  }
+
+  const savedSession = getAuthRecord();
+  if (savedSession.isAuthenticated && sessionNotice && sessionText) {
     sessionNotice.classList.remove("is-hidden");
     sessionText.textContent = `Signed in as ${savedSession.username}. You can continue directly or clear this session.`;
   }
 
   clearSessionBtn?.addEventListener("click", () => {
     clearSession();
-    sessionNotice.classList.add("is-hidden");
+    sessionNotice?.classList.add("is-hidden");
     setMessage("Session cleared.", "success");
   });
 
   togglePassword?.addEventListener("click", () => {
+    if (!passwordInput) return;
     const showing = passwordInput.type === "text";
     passwordInput.type = showing ? "password" : "text";
     togglePassword.textContent = showing ? "Show" : "Hide";
@@ -70,38 +149,36 @@
   loginForm?.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value.trim();
+    const username = (usernameInput?.value || "").trim();
+    const password = (passwordInput?.value || "").trim();
 
     if (username !== VALID_USERNAME || password !== VALID_PASSWORD) {
+      playSound(errorSound);
       setMessage("Invalid username or password.", "error");
       return;
     }
 
+    loginBtn?.setAttribute("disabled", "disabled");
     clearSession();
+    const persisted = saveSession(username, Boolean(rememberMe?.checked));
 
-    if (rememberMe.checked) {
-      localStorage.setItem("authUser", username);
-      localStorage.setItem("isAuthenticated", "true");
+    playSound(successSound);
+
+    if (!persisted) {
+      setMessage("Login successful. Browser storage is blocked, session is temporary for this tab.", "success");
     } else {
-      sessionStorage.setItem("authUser", username);
-      sessionStorage.setItem("isAuthenticated", "true");
+      setMessage("Login successful. Redirecting...", "success");
     }
 
-    try {
-      successSound?.play();
-    } catch {
-      // ignore autoplay restrictions
-    }
-
-    setMessage("Login successful. Redirecting...", "success");
     window.setTimeout(() => {
-      window.location.href = "home.html";
-    }, 500);
+      redirectToHome(!persisted);
+    }, 350);
   });
 
   const canvas = document.getElementById("particles");
-  const context = canvas.getContext("2d");
+  const context = canvas?.getContext("2d");
+  if (!canvas || !context) return;
+
   const particles = [];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const particleCount = reduceMotion ? 28 : 70;

@@ -172,6 +172,28 @@
   background: rgba(178, 87, 255, 0.14);
 }
 
+.social-link.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.nav-link:focus-visible,
+.social-link:focus-visible,
+.primary-btn:focus-visible,
+.ghost-btn:focus-visible,
+.secondary-btn:focus-visible,
+.reaction-btn:focus-visible,
+.switch-btn:focus-visible,
+.palette-swatch:focus-visible,
+.quiz-btn:focus-visible,
+.field input:focus-visible,
+.field textarea:focus-visible,
+.game-control-btn:focus-visible {
+  outline: 2px solid var(--purple-bright);
+  outline-offset: 2px;
+}
+
 .mini-stats {
   margin-top: 1rem;
   display: grid;
@@ -572,6 +594,45 @@
   margin-top: 0.55rem;
 }
 
+.game-controls {
+  margin-top: 0.6rem;
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  max-width: 220px;
+}
+
+.game-control-btn {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-strong);
+  min-height: 44px;
+  padding: 0.35rem;
+  font-size: 1.1rem;
+}
+
+.game-control-btn:hover {
+  border-color: rgba(209, 141, 255, 0.44);
+  background: rgba(178, 87, 255, 0.2);
+}
+
+.game-control-btn.up {
+  grid-column: 2;
+}
+
+.game-control-btn.left {
+  grid-column: 1;
+}
+
+.game-control-btn.down {
+  grid-column: 2;
+}
+
+.game-control-btn.right {
+  grid-column: 3;
+}
+
 .score {
   margin: 0.5rem 0 0;
   color: var(--silver);
@@ -704,6 +765,12 @@
   .sidebar {
     position: static;
     min-height: 0;
+    justify-content: flex-start;
+    gap: 0.9rem;
+  }
+
+  .logout-btn {
+    margin-top: 0;
   }
 
   #main.active {
@@ -751,5 +818,9 @@
   .nav-link,
   .social-link {
     text-align: center;
+  }
+
+  .game-controls {
+    display: grid;
   }
 }

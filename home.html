@@ -4,6 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Argi Studio | Portfolio</title>
+  <meta name="description" content="Argi Sumaylo portfolio featuring interactive design experiments, projects, and contact info.">
+  <meta property="og:title" content="Argi Studio | Portfolio">
+  <meta property="og:description" content="Interactive portfolio by Argi Sumaylo with visual experiments and playful web projects.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/images/logo.png">
+  <meta property="og:url" content="/home.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Argi Studio | Portfolio">
+  <meta name="twitter:description" content="Interactive portfolio by Argi Sumaylo with visual experiments and playful web projects.">
+  <meta name="twitter:image" content="assets/images/logo.png">
+  <link rel="icon" type="image/png" href="assets/images/logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -24,10 +35,10 @@
         </div>
 
         <nav class="nav" aria-label="Primary">
-          <a href="#" class="nav-link active" data-section="main">Home</a>
-          <a href="#" class="nav-link" data-section="about">About</a>
-          <a href="#" class="nav-link" data-section="projects">Projects</a>
-          <a href="#" class="nav-link" data-section="info">Contact</a>
+          <a href="#main" class="nav-link active" data-section="main">Home</a>
+          <a href="#about" class="nav-link" data-section="about">About</a>
+          <a href="#projects" class="nav-link" data-section="projects">Projects</a>
+          <a href="#info" class="nav-link" data-section="info">Contact</a>
         </nav>
 
         <div class="sidebar-card">
@@ -56,10 +67,9 @@
           </div>
 
           <div class="social-link-bar">
-            <a href="#" class="social-link instagram">Instagram</a>
-            <a href="#" class="social-link tiktok">TikTok</a>
-            <a href="#" class="social-link behance">Behance</a>
-            <a href="#" class="social-link facebook">Facebook</a>
+            <a href="https://www.instagram.com/argisan23?igsh=aWRteG00MzRqdmNt" class="social-link instagram" data-social="instagram" target="_blank" rel="noopener noreferrer">Instagram</a>
+            <a href="https://www.tiktok.com/@wkwkargi" class="social-link tiktok" data-social="tiktok" target="_blank" rel="noopener noreferrer">TikTok</a>
+            <a href="https://facebook.com/argi.sumaylo/" class="social-link facebook" data-social="facebook" target="_blank" rel="noopener noreferrer">Facebook</a>
           </div>
 
           <div class="mini-stats">
@@ -83,7 +93,7 @@
             <img src="argi.jpg" alt="Portrait of Argi Sumaylo" class="profile-img">
             <div class="hero-meta">
               <h3>Argi Sumaylo</h3>
-              <p>Graphic designer, beginner front-end builder, and visual experimenter.</p>
+              <p>Curiousity turns problems into puzzles, and puzzles into programs.</p>
             </div>
           </article>
 
@@ -223,9 +233,15 @@
               <span class="tag">Classic</span>
             </div>
             <h3>Snake Game</h3>
-            <p class="card-copy">Use the arrow keys after starting the game.</p>
+            <p class="card-copy">Use arrow keys on desktop or touch controls on mobile after starting the game.</p>
             <button type="button" id="startButton" class="primary-btn">Start game</button>
             <canvas id="gameCanvas" width="400" height="400"></canvas>
+            <div class="game-controls" aria-label="Snake controls">
+              <button type="button" class="game-control-btn up" data-dir="UP" aria-label="Move up">▲</button>
+              <button type="button" class="game-control-btn left" data-dir="LEFT" aria-label="Move left">◀</button>
+              <button type="button" class="game-control-btn down" data-dir="DOWN" aria-label="Move down">▼</button>
+              <button type="button" class="game-control-btn right" data-dir="RIGHT" aria-label="Move right">▶</button>
+            </div>
             <p id="score" class="score">Score: 0</p>
           </article>
         </div>
@@ -294,20 +310,19 @@
           <div class="contact-column">
             <article class="content-card contact-card">
               <h3>Details</h3>
-              <p><strong>Email:</strong> wkwk.argi20@gmail.com</p>
-              <p><strong>Phone:</strong> 0956 4318 494</p>
+              <p><strong>Email:</strong> <a href="mailto:wkwk.argi20@gmail.com">wkwk.argi20@gmail.com</a></p>
+              <p><strong>Phone:</strong> <a href="tel:+639564318494">0956 4318 494</a></p>
               <p><strong>Based in:</strong> Cebu, Philippines</p>
               <p><strong>Tools:</strong> Figma, Photoshop, VS Code</p>
             </article>
 
             <article class="content-card contact-card">
               <h3>Social-ready ideas</h3>
-              <p>Add your Facebook, Instagram, TikTok, or Behance links so visitors can keep following your work after they leave this page.</p>
+              <p>Add your Facebook, Instagram, and TikTok links so visitors can keep following your work after they leave this page.</p>
               <div class="social-link-stack">
-                <a href="#" class="social-link instagram">Follow on Instagram</a>
-                <a href="#" class="social-link tiktok">Watch on TikTok</a>
-                <a href="#" class="social-link behance">View on Behance</a>
-                <a href="#" class="social-link facebook">Connect on Facebook</a>
+                <a href="https://www.instagram.com/argisan23?igsh=aWRteG00MzRqdmNt" class="social-link instagram" data-social="instagram" target="_blank" rel="noopener noreferrer">Follow on Instagram</a>
+                <a href="https://www.tiktok.com/@wkwkargi" class="social-link tiktok" data-social="tiktok" target="_blank" rel="noopener noreferrer">Watch on TikTok</a>
+                <a href="https://facebook.com/argi.sumaylo/" class="social-link facebook" data-social="facebook" target="_blank" rel="noopener noreferrer">Connect on Facebook</a>
               </div>
             </article>
           </div>

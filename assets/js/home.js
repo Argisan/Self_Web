@@ -1,10 +1,43 @@
 (() => {
+  function safeGet(storage, key) {
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function safeSet(storage, key, value) {
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function safeRemove(storage, key) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  const hasTempAuth = new URLSearchParams(window.location.search).get("auth") === "ok";
+  if (hasTempAuth) {
+    safeSet(sessionStorage, "isAuthenticated", "true");
+    const cleanUrl = `${window.location.pathname}${window.location.hash}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
   const isAuthenticated =
-    localStorage.getItem("isAuthenticated") === "true" ||
-    sessionStorage.getItem("isAuthenticated") === "true";
+    safeGet(localStorage, "isAuthenticated") === "true" ||
+    safeGet(sessionStorage, "isAuthenticated") === "true" ||
+    hasTempAuth;
 
   if (!isAuthenticated) {
-    window.location.href = "index.html";
+    window.location.href = "login.html";
     return;
   }
 
@@ -13,6 +46,30 @@
   const moreAboutBtn = document.getElementById("moreAboutBtn");
   const logoutBtn = document.getElementById("logoutBtn");
   const sectionJumpLinks = document.querySelectorAll("[data-section-jump]");
+  const socialLinks = document.querySelectorAll("[data-social]");
+  const SOCIAL_LINKS = {
+    instagram: "https://www.instagram.com/argisan23?igsh=aWRteG00MzRqdmNt",
+    tiktok: "https://www.tiktok.com/@wkwkargi",
+    facebook: "https://facebook.com/argi.sumaylo/",
+  };
+
+  function initSocialLinks() {
+    socialLinks.forEach((link) => {
+      const key = link.dataset.social;
+      const href = SOCIAL_LINKS[key];
+
+      if (!href) {
+        link.classList.add("is-disabled");
+        link.setAttribute("aria-disabled", "true");
+        link.removeAttribute("href");
+        return;
+      }
+
+      link.href = href;
+      link.classList.remove("is-disabled");
+      link.removeAttribute("aria-disabled");
+    });
+  }
 
   function animateSkills() {
     document.querySelectorAll(".skill-fill").forEach((fill) => {
@@ -66,11 +123,11 @@
   });
 
   logoutBtn?.addEventListener("click", () => {
-    localStorage.removeItem("authUser");
-    localStorage.removeItem("isAuthenticated");
-    sessionStorage.removeItem("authUser");
-    sessionStorage.removeItem("isAuthenticated");
-    window.location.href = "index.html";
+    safeRemove(localStorage, "authUser");
+    safeRemove(localStorage, "isAuthenticated");
+    safeRemove(sessionStorage, "authUser");
+    safeRemove(sessionStorage, "isAuthenticated");
+    window.location.href = "login.html";
   });
 
   const reactionButtons = document.querySelectorAll(".reaction-btn");
@@ -454,9 +511,12 @@
 
   const canvas = document.getElementById("gameCanvas");
   const startButton = document.getElementById("startButton");
+  const gameControlButtons = document.querySelectorAll(".game-control-btn");
   const scoreNode = document.getElementById("score");
   const context = canvas.getContext("2d");
   const grid = 20;
+  const minGameSize = 240;
+  const maxGameSize = 400;
   let animationFrameId = 0;
   let tick = 0;
   let score = 0;
@@ -471,6 +531,17 @@
 
   function randomGridPosition(limit) {
     return Math.floor(Math.random() * limit) * grid;
+  }
+
+  function fitGameCanvas() {
+    const parent = canvas.parentElement;
+    if (!parent) return;
+
+    const available = Math.min(maxGameSize, Math.max(minGameSize, parent.clientWidth - 20));
+    const snapped = Math.floor(available / grid) * grid;
+    const size = Math.max(minGameSize, snapped);
+    canvas.width = size;
+    canvas.height = size;
   }
 
   function placeFood() {
@@ -537,6 +608,13 @@
     }
   }
 
+  function setDirection(nextDirection) {
+    if (nextDirection === "UP" && direction !== "DOWN") direction = "UP";
+    if (nextDirection === "DOWN" && direction !== "UP") direction = "DOWN";
+    if (nextDirection === "LEFT" && direction !== "RIGHT") direction = "LEFT";
+    if (nextDirection === "RIGHT" && direction !== "LEFT") direction = "RIGHT";
+  }
+
   function hasCollision() {
     const [head, ...body] = snake;
 
@@ -574,10 +652,19 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
-    if (event.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
-    if (event.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
-    if (event.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
+    if (event.key === "ArrowUp") setDirection("UP");
+    if (event.key === "ArrowDown") setDirection("DOWN");
+    if (event.key === "ArrowLeft") setDirection("LEFT");
+    if (event.key === "ArrowRight") setDirection("RIGHT");
+  });
+
+  gameControlButtons.forEach((button) => {
+    const nextDirection = button.dataset.dir;
+    if (!nextDirection) return;
+
+    button.addEventListener("click", () => {
+      setDirection(nextDirection);
+    });
   });
 
   const contactForm = document.getElementById("contactForm");
@@ -686,10 +773,13 @@
   }
 
   window.addEventListener("resize", () => {
+    fitGameCanvas();
     resizeFeatherCanvas();
     seedFeathers();
   });
 
+  initSocialLinks();
+  fitGameCanvas();
   resizeFeatherCanvas();
   seedFeathers();
   animateFeathers();
