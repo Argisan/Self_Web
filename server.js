@@ -499,29 +499,35 @@ async function releaseSessionById(licenseKey, sessionId) {
 
 // ─── Netflix Cookie Validation ─────────────────────────────────────────────
 
-const NETFLIX_GRAPHQL_URL = process.env.NETFLIX_GRAPHQL_URL || "https://tvos.prod.ftl.netflix.com/graphql";
-const NETFLIX_GRAPHQL_QUERY = `
-  query GetUserData {
-    user {
-      email
-      accountStatus
-      subscription {
-        tier
-        country
-        expiresAt
-      }
-    }
-  }
-`;
+const NETFLIX_GRAPHQL_ENDPOINTS = [
+  "https://tvos.prod.ftl.netflix.com/graphql",
+  "https://tvos.prod.cloud.netflix.com/graphql",
+  "https://tvos.prod.http1.netflix.com/graphql",
+];
 
-function httpsPostNetflix(cookieStr) {
+// Build a minimal GraphQL query for a given root field name.
+function buildNetflixQuery(field) {
+  const op = `Get${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+  return {
+    operationName: op,
+    field,
+    query: `query ${op} { ${field} { id email membership { tier country expiresAt } } }`,
+  };
+}
+
+// Ordered list of query candidates.  Each entry carries the field name used
+// in the response so we can extract data regardless of which one succeeds.
+const NETFLIX_GRAPHQL_CANDIDATES = [
+  buildNetflixQuery("viewer"),
+  buildNetflixQuery("viewerProfile"),
+  buildNetflixQuery("accountProfile"),
+  buildNetflixQuery("user"),
+];
+
+function httpsPostNetflixRaw(endpointUrl, operationName, query, cookieStr) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      operationName: "GetUserData",
-      query: NETFLIX_GRAPHQL_QUERY,
-      variables: {},
-    });
-    const parsed = new URL(NETFLIX_GRAPHQL_URL);
+    const body = JSON.stringify({ operationName, query, variables: {} });
+    const parsed = new URL(endpointUrl);
     const options = {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
@@ -547,6 +553,62 @@ function httpsPostNetflix(cookieStr) {
     req.write(body);
     req.end();
   });
+}
+
+/**
+ * Try every combination of endpoint × query candidate until one returns a
+ * successful GraphQL response (i.e. has `data.<field>` without errors).
+ * Returns `{ userData, field }` on success or throws the last error.
+ */
+async function httpsPostNetflix(cookieStr) {
+  const failureMessages = [];
+
+  for (const endpoint of NETFLIX_GRAPHQL_ENDPOINTS) {
+    for (const candidate of NETFLIX_GRAPHQL_CANDIDATES) {
+      try {
+        const result = await httpsPostNetflixRaw(
+          endpoint,
+          candidate.operationName,
+          candidate.query,
+          cookieStr,
+        );
+
+        let parsed;
+        try {
+          parsed = JSON.parse(result.body);
+        } catch {
+          const msg = `${endpoint} / ${candidate.field}: invalid JSON response`;
+          console.warn("[Netflix Validation]", msg);
+          failureMessages.push(msg);
+          continue;
+        }
+
+        if (parsed.errors && parsed.errors.length > 0) {
+          const errMsg = parsed.errors[0]?.message || "unknown GraphQL error";
+          const msg = `${endpoint} / ${candidate.field}: ${errMsg}`;
+          console.warn("[Netflix Validation]", msg);
+          failureMessages.push(msg);
+          continue;
+        }
+
+        if (parsed.data && parsed.data[candidate.field]) {
+          console.info(`[Netflix Validation] Success via ${endpoint} / ${candidate.field}`);
+          return { userData: parsed.data[candidate.field], field: candidate.field };
+        }
+
+        const msg = `${endpoint} / ${candidate.field}: no data returned`;
+        console.warn("[Netflix Validation]", msg);
+        failureMessages.push(msg);
+      } catch (err) {
+        const msg = `${endpoint} / ${candidate.field}: ${err.message}`;
+        console.warn("[Netflix Validation]", msg);
+        failureMessages.push(msg);
+      }
+    }
+  }
+
+  const total = NETFLIX_GRAPHQL_ENDPOINTS.length * NETFLIX_GRAPHQL_CANDIDATES.length;
+  throw new Error(`All ${total} Netflix GraphQL attempts failed:\n` + failureMessages.join("\n"));
 }
 
 async function handleValidateNetflix(request, response) {
@@ -606,46 +668,25 @@ async function handleValidateNetflix(request, response) {
   }
 
   try {
-    const upstream = await httpsPostNetflix(payload.cookies.trim());
+    const { userData } = await httpsPostNetflix(payload.cookies.trim());
 
-    let upstreamData;
-    try {
-      upstreamData = JSON.parse(upstream.body);
-    } catch {
-      sendJson(response, 502, { status: "ERROR", message: "Invalid response from Netflix" });
-      return;
-    }
-
-    if (upstreamData.errors && upstreamData.errors.length > 0) {
-      sendJson(response, 200, {
-        status: "ERROR",
-        message: upstreamData.errors[0]?.message || "Invalid cookies or Netflix API error",
-      });
-      return;
-    }
-
-    if (upstreamData.data?.user) {
-      const userData = upstreamData.data.user;
-      sendJson(response, 200, {
-        status: "SUCCESS",
-        x_mail: userData.email || "N/A",
-        x_tier: userData.subscription?.tier || "Unknown",
-        x_loc: userData.subscription?.country || "N/A",
-        x_ren: userData.subscription?.expiresAt || "N/A",
-        x_mem: "N/A",
-        x_bil: "N/A",
-        x_tel: "N/A",
-        x_usr: "N/A",
-        x_l1: "#",
-        x_l2: "#",
-        x_l3: "#",
-      });
-      return;
-    }
+    // Normalise field names – different query shapes may return `subscription`
+    // or `membership` for the plan details.
+    const plan = userData.subscription || userData.membership || {};
 
     sendJson(response, 200, {
-      status: "ERROR",
-      message: "No user data returned from Netflix",
+      status: "SUCCESS",
+      x_mail: userData.email || "N/A",
+      x_tier: plan.tier || "Unknown",
+      x_loc: plan.country || "N/A",
+      x_ren: plan.expiresAt || "N/A",
+      x_mem: "N/A",
+      x_bil: "N/A",
+      x_tel: "N/A",
+      x_usr: "N/A",
+      x_l1: "#",
+      x_l2: "#",
+      x_l3: "#",
     });
   } catch (error) {
     console.error("[Netflix Validation] Error:", error.message);
