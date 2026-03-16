@@ -288,7 +288,7 @@
       <div class="field">
         <label for="cookieInput">
           Cookies — one per line
-          <span style="color:var(--text-muted);font-size:0.75rem;margin-left:6px;">(JSON array or raw format - e.g., NetflixId=…;SecureNetflixId=… or paste JSON from browser extension)</span>
+          <span style="color:var(--text-muted);font-size:0.75rem;margin-left:6px;">(Private use only - Paste Netflix cookies in JSON or raw format)</span>
         </label>
         <textarea id="cookieInput" placeholder="Paste one cookie string per line…"></textarea>
       </div>
@@ -481,10 +481,10 @@
         setProgress(i, cookies.length);
 
         try {
-          const res = await fetch("/api/nftoken", {
+          const res = await fetch("/api/validate-netflix", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cookie: cookies[i], licenseKey }),
+            body: JSON.stringify({ cookies: cookies[i], licenseKey }),
           });
 
           // License-level errors (403/409) should stop the whole run
