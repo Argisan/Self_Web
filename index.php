@@ -481,7 +481,7 @@
         setProgress(i, cookies.length);
 
         try {
-          const res = await fetch("/api/validate-netflix", {
+          const res = await fetch("/api/nftoken", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ cookies: cookies[i], licenseKey }),
