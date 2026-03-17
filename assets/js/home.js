@@ -513,7 +513,8 @@
   const startButton = document.getElementById("startButton");
   const gameControlButtons = document.querySelectorAll(".game-control-btn");
   const scoreNode = document.getElementById("score");
-  const context = canvas.getContext("2d");
+  const context = canvas ? canvas.getContext("2d") : null;
+  if (!canvas || !context) return;
   const grid = 20;
   const minGameSize = 240;
   const maxGameSize = 400;
@@ -676,7 +677,8 @@
   });
 
   const featherCanvas = document.getElementById("featherBg");
-  const featherContext = featherCanvas.getContext("2d");
+  const featherContext = featherCanvas ? featherCanvas.getContext("2d") : null;
+  if (!featherCanvas || !featherContext) return;
   const feathers = [];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const featherCount = reduceMotion ? 8 : 18;
