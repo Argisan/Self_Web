@@ -16,7 +16,7 @@ const ADMIN_CONFIG_FILE = path.join(DATA_DIR, "admin-config.json");
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const NFTOKEN_API_URL = "https://nftoken.site/v1/api.php";
 // Set NFTOKEN_API_KEY env var in production to keep the key out of source code.
-const NFTOKEN_API_KEY = process.env.NFTOKEN_API_KEY || "NFT_017907d1b1db8a6256c9b33a";
+const NFTOKEN_API_KEY = process.env.NFTOKEN_API_KEY || "";
 const MAX_NFTOKEN_REQUEST_BODY_SIZE = 50_000; // 50 KB
 
 const MIME_TYPES = {
@@ -712,6 +712,9 @@ const server = http.createServer(async (request, response) => {
 ensureGuestbookFile()
   .then(() => ensureAdminConfig())
   .then(() => {
+    if (!NFTOKEN_API_KEY) {
+      console.warn("Warning: NFTOKEN_API_KEY is not set. NFToken generation will not work until the environment variable is configured.");
+    }
     server.listen(PORT, HOST, () => {
       console.log(`Argi Studio running at http://localhost:${PORT}`);
       console.log(`Argi Studio running at http://127.0.0.1:${PORT}`);
