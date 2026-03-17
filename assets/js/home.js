@@ -778,6 +778,121 @@
     seedFeathers();
   });
 
+  function initRevealCards() {
+    const STAGGER_DELAY_MS = 70;
+    const cards = document.querySelectorAll(".reveal-card");
+    if (!cards.length) return;
+
+    if (reduceMotion) {
+      cards.forEach((card) => card.classList.add("is-visible"));
+      return;
+    }
+
+    // Assign staggered delays by position within each grid container
+    document.querySelectorAll(".projects-grid, .play-zone-grid, .about-grid, .contact-grid, .contact-column").forEach((container) => {
+      container.querySelectorAll(".reveal-card").forEach((card, index) => {
+        card.style.setProperty("--reveal-delay", `${index * STAGGER_DELAY_MS}ms`);
+      });
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.05 },
+    );
+
+    cards.forEach((card) => observer.observe(card));
+  }
+
+  function initCursorGlow() {
+    const LERP_FACTOR = 0.08;
+    const glow = document.getElementById("cursorGlow");
+    if (!glow || reduceMotion) return;
+
+    let targetX = -400;
+    let targetY = -400;
+    let currentX = -400;
+    let currentY = -400;
+
+    document.addEventListener("mousemove", (event) => {
+      targetX = event.clientX;
+      targetY = event.clientY;
+      glow.style.opacity = "1";
+    });
+
+    document.addEventListener("mouseleave", () => {
+      glow.style.opacity = "0";
+    });
+
+    function animateGlow() {
+      currentX += (targetX - currentX) * LERP_FACTOR;
+      currentY += (targetY - currentY) * LERP_FACTOR;
+      glow.style.left = `${currentX}px`;
+      glow.style.top = `${currentY}px`;
+      requestAnimationFrame(animateGlow);
+    }
+
+    animateGlow();
+  }
+
+  function initCardTilt() {
+    if (reduceMotion) return;
+
+    document.querySelectorAll(".project-card").forEach((card) => {
+      card.addEventListener("mouseenter", () => {
+        if (!card.classList.contains("is-visible")) return;
+        card.style.transition = "";
+      });
+
+      card.addEventListener("mousemove", (event) => {
+        if (!card.classList.contains("is-visible")) return;
+        const rect = card.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width - 0.5;
+        const y = (event.clientY - rect.top) / rect.height - 0.5;
+        card.style.transform = `perspective(700px) rotateX(${-y * 5}deg) rotateY(${x * 5}deg) translateZ(6px)`;
+        card.style.boxShadow = "var(--shadow-glow)";
+      });
+
+      card.addEventListener("mouseleave", () => {
+        card.style.transition = "transform 320ms ease, box-shadow 320ms ease";
+        card.style.transform = "";
+        card.style.boxShadow = "";
+      });
+    });
+  }
+
+  function initTypingEffect() {
+    const TYPING_SPEED_MS = 38;
+    const eyebrow = document.querySelector(".hero-copy .eyebrow");
+    if (!eyebrow || reduceMotion) return;
+
+    const originalText = eyebrow.textContent.trim();
+    eyebrow.textContent = "";
+    // Keep accessible label so screen readers announce the full text immediately
+    eyebrow.setAttribute("aria-label", originalText);
+    eyebrow.setAttribute("aria-live", "off");
+
+    let index = 0;
+
+    function typeNext() {
+      if (index < originalText.length) {
+        eyebrow.textContent += originalText[index];
+        index += 1;
+        setTimeout(typeNext, TYPING_SPEED_MS);
+      } else {
+        setTimeout(() => eyebrow.classList.add("typing-done"), 2200);
+      }
+    }
+
+    setTimeout(typeNext, 250);
+  }
+
   initSocialLinks();
   fitGameCanvas();
   resizeFeatherCanvas();
@@ -786,4 +901,8 @@
   renderReactionBoard();
   loadGuestbook();
   drawBoard();
+  initRevealCards();
+  initCursorGlow();
+  initCardTilt();
+  initTypingEffect();
 })();

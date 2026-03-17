@@ -801,6 +801,58 @@
   margin-top: 0.5rem;
 }
 
+/* ── Card reveal animations ─────────────────────────────────── */
+.reveal-card {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 480ms ease, transform 480ms ease;
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.reveal-card.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Project card tilt ──────────────────────────────────────── */
+.project-card {
+  will-change: transform;
+}
+
+/* ── Hero eyebrow typing cursor ─────────────────────────────── */
+.hero-copy .eyebrow::after {
+  content: "|";
+  color: var(--purple);
+  animation: cursor-blink 0.75s step-end infinite;
+  margin-left: 1px;
+}
+
+.hero-copy .eyebrow.typing-done::after {
+  display: none;
+}
+
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-card {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .hero-copy .eyebrow::after {
+    display: none;
+  }
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
