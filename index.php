@@ -467,7 +467,7 @@
           const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
           const deduped = existing.filter((a) => a.email !== accountData.email);
           const newEntry = {
-            id: (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)),
+            id: (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)),
             ...accountData,
             savedAt: new Date().toISOString(),
           };

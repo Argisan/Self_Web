@@ -188,7 +188,7 @@ async function handleAccounts(request, response, pathname) {
   }
 
   // DELETE /api/accounts/:id
-  const idMatch = pathname.match(/^\/api\/accounts\/([a-f0-9]+)$/);
+  const idMatch = pathname.match(/^\/api\/accounts\/([a-fA-F0-9-]+)$/);
   if (idMatch && request.method === "DELETE") {
     const id = idMatch[1];
     let accounts = await readAccounts();
