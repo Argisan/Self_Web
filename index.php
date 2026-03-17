@@ -254,6 +254,26 @@
 
     .result-error-msg { font-size: 0.85rem; color: var(--text-muted); }
 
+    /* ── Save to Library ─────────────────────────────────────────────── */
+    .save-library-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 10px;
+      background: rgba(178,87,255,0.12);
+      border: 1px solid rgba(178,87,255,0.4);
+      color: var(--purple-bright);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s;
+      font-family: inherit;
+    }
+    .save-library-btn:hover { background: rgba(178,87,255,0.24); box-shadow: 0 0 10px rgba(128,0,128,0.3); }
+    .save-library-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .save-library-btn.saved { background: rgba(133,241,198,0.1); border-color: rgba(133,241,198,0.4); color: var(--success); }
+
     /* ── Helpers ─────────────────────────────────────────────── */
     .hidden { display: none !important; }
     .eyebrow {
@@ -397,6 +417,10 @@
       const mobileLink = data.x_l2 || "#";
       const tvLink     = data.x_l3 || "#";
 
+      // Extract NFToken from any of the magic links
+      const tokenMatch = (directLink + mobileLink + tvLink).match(/nftoken=([^&\s"]+)/);
+      const nftoken = tokenMatch ? tokenMatch[1] : "";
+
       const item = document.createElement("div");
       item.className = "result-item is-success";
       item.innerHTML = `
@@ -415,7 +439,65 @@
           <a href="${escapeHtml(directLink)}" target="_blank" rel="noopener noreferrer">🖥 PC</a>
           <a href="${escapeHtml(mobileLink)}" target="_blank" rel="noopener noreferrer">📱 Mobile</a>
           <a href="${escapeHtml(tvLink)}" target="_blank" rel="noopener noreferrer">📺 TV</a>
+        </div>
+        <div style="margin-top:10px;">
+          <button class="save-library-btn" data-email="${escapeHtml(data.x_mail || "")}" data-tier="${escapeHtml(tier)}" data-country="${escapeHtml(data.x_loc || "")}" data-membersince="${escapeHtml(data.x_mem || "")}" data-profiles="${escapeHtml(data.x_usr || "0")}" data-token="${escapeHtml(nftoken)}">📚 Save to Library</button>
+          <span class="save-library-status" style="margin-left:8px;font-size:0.8rem;color:var(--text-muted);"></span>
         </div>`;
+
+      // Wire up Save to Library button
+      const saveBtn = item.querySelector(".save-library-btn");
+      const saveStatus = item.querySelector(".save-library-status");
+      saveBtn.addEventListener("click", async () => {
+        saveBtn.disabled = true;
+        saveStatus.textContent = "Saving…";
+
+        const accountData = {
+          email: saveBtn.dataset.email,
+          tier: saveBtn.dataset.tier,
+          country: saveBtn.dataset.country,
+          memberSince: saveBtn.dataset.membersince,
+          profiles: parseInt(saveBtn.dataset.profiles, 10) || 0,
+          token: saveBtn.dataset.token,
+        };
+
+        try {
+          // Save to localStorage immediately
+          const STORAGE_KEY = "argi_accounts";
+          const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+          const deduped = existing.filter((a) => a.email !== accountData.email);
+          const newEntry = {
+            id: (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)),
+            ...accountData,
+            savedAt: new Date().toISOString(),
+          };
+          deduped.unshift(newEntry);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
+
+          // Also try server sync
+          const licenseKey = sessionStorage.getItem("nft_checker_license") || "";
+          if (licenseKey) {
+            await fetch("/api/accounts", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${licenseKey}`,
+              },
+              body: JSON.stringify(accountData),
+            }).catch(() => {});
+          }
+
+          saveBtn.classList.add("saved");
+          saveBtn.textContent = "✓ Saved";
+          saveStatus.style.color = "var(--success)";
+          saveStatus.textContent = "Account saved to library.";
+        } catch {
+          saveBtn.disabled = false;
+          saveStatus.style.color = "var(--danger)";
+          saveStatus.textContent = "Failed to save. Try again.";
+        }
+      });
+
       return item;
     }
 

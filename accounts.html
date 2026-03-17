@@ -1,101 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Account Library</title>
-    <style>
-        body {
-            background-color: black;
-            color: white;
-        }
-        .card {
-            background-color: purple;
-            box-shadow: 0 0 10px 5px rgba(128, 0, 128, 0.5);
-            margin: 15px;
-            padding: 20px;
-            border-radius: 10px;
-        }
-        .hidden {
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argi Studio | Account Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-900: #060509;
+      --bg-850: #0b0912;
+      --bg-800: #12101d;
+      --bg-700: #19162a;
+      --surface: rgba(19,17,31,0.88);
+      --surface-strong: rgba(24,21,38,0.96);
+      --border: rgba(201,192,214,0.22);
+      --text-strong: #f2f0f7;
+      --text-muted: #c0bbcc;
+      --silver: #cfd2dc;
+      --purple: #b257ff;
+      --purple-bright: #d18dff;
+      --success: #85f1c6;
+      --danger: #ff8ea5;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-lg: 0 20px 50px rgba(0,0,0,0.45);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100%;
+      font-family: "Space Grotesk","Segoe UI",sans-serif;
+      color: var(--text-strong);
+      background:
+        radial-gradient(circle at 10% -10%, rgba(178,87,255,0.28), transparent 40%),
+        radial-gradient(circle at 90% 0%, rgba(178,87,255,0.18), transparent 35%),
+        linear-gradient(160deg, var(--bg-900), var(--bg-850) 55%, #05040a);
+    }
+
+    h1, h2, h3, strong { font-family: "Sora","Space Grotesk",sans-serif; }
+    a { color: var(--purple-bright); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+  <link rel="stylesheet" href="assets/css/home.css">
 </head>
 <body>
-    <div class="card">
-        <h1>Account Management</h1>
-        <form id="authForm">
-            <input type="text" id="username" placeholder="Username" required>
-            <input type="password" id="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
-        <div id="message" class="hidden"></div>
+
+  <div class="accounts-shell">
+
+    <header class="accounts-header">
+      <p class="eyebrow">Argi Studio</p>
+      <h1>Account Library</h1>
+      <p>Your saved Netflix accounts, all in one place.</p>
+    </header>
+
+    <!-- Auth notice — shown when no license key is stored -->
+    <div class="auth-notice" id="authNotice" style="display:none;">
+      <h2>🔒 License Required</h2>
+      <p>You need an active license key to access the account library. Open the NFToken Checker, enter your license key, and validate an account first.</p>
+      <a href="index.php" style="display:inline-block;margin-top:4px;padding:10px 22px;background:linear-gradient(135deg,var(--purple),#6f2ca3);color:#fff;border-radius:var(--radius-md);font-weight:600;font-family:'Sora',sans-serif;font-size:0.9rem;">Go to NFToken Checker →</a>
     </div>
-    <script>
-        const authForm = document.getElementById('authForm');
-        const messageDiv = document.getElementById('message');
 
-        authForm.onsubmit = function(event) {
-            event.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+    <!-- Main accounts section -->
+    <div id="accountsSection">
 
-            // Authentication check
-            authenticateUser(username, password);
-        };
+      <div class="accounts-toolbar">
+        <span class="accounts-count" id="accountsCount">Loading…</span>
+        <a href="index.php" style="font-size:0.85rem;color:var(--text-muted);">← NFToken Checker</a>
+      </div>
 
-        function authenticateUser(username, password) {
-            // Check localStorage
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                const user = JSON.parse(storedUser);
-                if (user.username === username && user.password === password) {
-                    messageDiv.textContent = 'Welcome, ' + username + '!';
-                    messageDiv.classList.remove('hidden');
-                } else {
-                    fetch('https://api.example.com/auth', {  // Replace with actual API URL
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ username, password })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            // Save user to localStorage
-                            localStorage.setItem('user', JSON.stringify({ username }));
-                            messageDiv.textContent = 'Welcome, ' + username + '!';
-                            messageDiv.classList.remove('hidden');
-                        } else {
-                            messageDiv.textContent = 'Invalid credentials';
-                            messageDiv.classList.remove('hidden');
-                        }
-                    });
-                }
-            } else {
-                // If no user in localStorage, check API
-                fetch('https://api.example.com/auth', {  // Replace with actual API URL
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, password })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Save user to localStorage
-                        localStorage.setItem('user', JSON.stringify({ username }));
-                        messageDiv.textContent = 'Welcome, ' + username + '!';
-                        messageDiv.classList.remove('hidden');
-                    } else {
-                        messageDiv.textContent = 'Invalid credentials';
-                        messageDiv.classList.remove('hidden');
-                    }
-                });
-            }
-        }
-    </script>
+      <!-- Empty state -->
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <span class="empty-state-icon">📭</span>
+        <h3>No accounts saved yet</h3>
+        <p>Validate a Netflix account in the NFToken Checker and click "Save to Library" to add it here.</p>
+        <a href="index.php" style="display:inline-block;margin-top:4px;padding:10px 22px;background:linear-gradient(135deg,var(--purple),#6f2ca3);color:#fff;border-radius:var(--radius-md);font-weight:600;font-family:'Sora',sans-serif;font-size:0.9rem;">Open NFToken Checker →</a>
+      </div>
+
+      <!-- Account grid -->
+      <div class="account-grid" id="accountGrid" aria-live="polite"></div>
+
+    </div>
+
+  </div>
+
+  <!-- Modal overlay -->
+  <div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalEmailLabel">
+    <div class="modal-box" id="modalContent"></div>
+  </div>
+
+  <script src="assets/js/accounts.js"></script>
+  <script>
+    // Update toolbar count once accounts load
+    const _origRender = window.accountManager && window.accountManager.render.bind(window.accountManager);
+    function updateCount() {
+      const countEl = document.getElementById("accountsCount");
+      if (!countEl || !window.accountManager) return;
+      const n = window.accountManager.accounts.length;
+      countEl.textContent = n === 0 ? "No accounts saved" : `${n} account${n !== 1 ? "s" : ""} saved`;
+    }
+
+    // Patch render to also update count
+    if (window.accountManager) {
+      const origRender = window.accountManager.render.bind(window.accountManager);
+      window.accountManager.render = function() {
+        origRender();
+        updateCount();
+      };
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      updateCount();
+    });
+  </script>
 </body>
 </html>

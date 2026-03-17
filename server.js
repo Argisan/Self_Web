@@ -12,6 +12,7 @@ const DATA_DIR = path.join(ROOT, "data");
 const GUESTBOOK_FILE = path.join(DATA_DIR, "guestbook.json");
 const LICENSES_FILE = path.join(DATA_DIR, "licenses.json");
 const ADMIN_CONFIG_FILE = path.join(DATA_DIR, "admin-config.json");
+const ACCOUNTS_FILE = path.join(DATA_DIR, "accounts.json");
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const NFTOKEN_API_URL = "https://nftoken.site/v1/api.php";
@@ -100,6 +101,141 @@ async function ensureAdminConfig() {
       console.log("   Store this safely — it will not be shown again.\n");
     }
   }
+}
+
+// ─── Account library storage ─────────────────────────────────────────────────
+
+const MAX_ACCOUNTS = 200;
+
+async function readAccounts() {
+  try {
+    const raw = await fsp.readFile(ACCOUNTS_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeAccounts(accounts) {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  await fsp.writeFile(ACCOUNTS_FILE, JSON.stringify(accounts.slice(0, MAX_ACCOUNTS), null, 2));
+}
+
+// ─── Account API ──────────────────────────────────────────────────────────────
+
+async function isLicenseKeyValid(licenseKey) {
+  if (!licenseKey) return false;
+  let keys = await readLicenses();
+  keys = expireOldSessions(keys);
+  const entry = keys.find((k) => k.key === licenseKey);
+  return !!(entry && entry.enabled && !(entry.expiresAt && new Date(entry.expiresAt) < new Date()));
+}
+
+function getLicenseKeyFromRequest(request) {
+  const auth = request.headers["authorization"] || "";
+  if (auth.startsWith("Bearer ")) return auth.slice(7).trim();
+  return "";
+}
+
+async function handleAccounts(request, response, pathname) {
+  const licenseKey = getLicenseKeyFromRequest(request);
+  if (!(await isLicenseKeyValid(licenseKey))) {
+    sendJson(response, 401, { error: "A valid license key is required." });
+    return;
+  }
+
+  // GET /api/accounts — list all
+  if (pathname === "/api/accounts" && request.method === "GET") {
+    const accounts = await readAccounts();
+    sendJson(response, 200, accounts);
+    return;
+  }
+
+  // POST /api/accounts — save new account
+  if (pathname === "/api/accounts" && request.method === "POST") {
+    let payload;
+    try {
+      const body = await readBody(request);
+      payload = JSON.parse(body || "{}");
+    } catch {
+      sendJson(response, 400, { error: "Invalid request body." });
+      return;
+    }
+
+    const email = String(payload.email || "").trim().slice(0, 200);
+    if (!email) {
+      sendJson(response, 400, { error: "email is required." });
+      return;
+    }
+
+    const account = {
+      id: generateId(),
+      email,
+      tier: String(payload.tier || "").trim().slice(0, 80),
+      country: String(payload.country || "").trim().slice(0, 10),
+      memberSince: String(payload.memberSince || "").trim().slice(0, 40),
+      profiles: Number(payload.profiles) || 0,
+      token: String(payload.token || "").trim().slice(0, 500),
+      savedAt: new Date().toISOString(),
+    };
+
+    const accounts = await readAccounts();
+    accounts.unshift(account);
+    await writeAccounts(accounts);
+    sendJson(response, 201, account);
+    return;
+  }
+
+  // DELETE /api/accounts/:id
+  const idMatch = pathname.match(/^\/api\/accounts\/([a-f0-9]+)$/);
+  if (idMatch && request.method === "DELETE") {
+    const id = idMatch[1];
+    let accounts = await readAccounts();
+    const before = accounts.length;
+    accounts = accounts.filter((a) => a.id !== id);
+    if (accounts.length === before) {
+      sendJson(response, 404, { error: "Account not found." });
+      return;
+    }
+    await writeAccounts(accounts);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  // PATCH /api/accounts/:id — update account
+  if (idMatch && request.method === "PATCH") {
+    const id = idMatch[1];
+    let payload;
+    try {
+      const body = await readBody(request);
+      payload = JSON.parse(body || "{}");
+    } catch {
+      sendJson(response, 400, { error: "Invalid request body." });
+      return;
+    }
+
+    const accounts = await readAccounts();
+    const account = accounts.find((a) => a.id === id);
+    if (!account) {
+      sendJson(response, 404, { error: "Account not found." });
+      return;
+    }
+
+    if (typeof payload.email === "string") account.email = payload.email.trim().slice(0, 200);
+    if (typeof payload.tier === "string") account.tier = payload.tier.trim().slice(0, 80);
+    if (typeof payload.country === "string") account.country = payload.country.trim().slice(0, 10);
+    if (typeof payload.memberSince === "string") account.memberSince = payload.memberSince.trim().slice(0, 40);
+    if (typeof payload.profiles === "number") account.profiles = payload.profiles;
+    if (typeof payload.token === "string") account.token = payload.token.trim().slice(0, 500);
+
+    await writeAccounts(accounts);
+    sendJson(response, 200, account);
+    return;
+  }
+
+  response.writeHead(405, { Allow: "GET, POST, DELETE, PATCH" });
+  response.end("Method Not Allowed");
 }
 
 function generateLicenseKey() {
@@ -695,6 +831,11 @@ const server = http.createServer(async (request, response) => {
 
     if (url.pathname === "/api/nftoken") {
       await handleNFToken(request, response);
+      return;
+    }
+
+    if (url.pathname === "/api/accounts" || url.pathname.startsWith("/api/accounts/")) {
+      await handleAccounts(request, response, url.pathname);
       return;
     }
 
