@@ -1,1 +1,174 @@
-<!DOCTYPE html>\n<html lang='en'>\n<head>\n    <meta charset='UTF-8'>\n    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n    <title>NFToken Checker</title>\n    <style>\n        body {\n            background: linear-gradient(to right, #8e44ad, #2c3e50);\n            color: #fff;\n            font-family: Arial, sans-serif;\n            display: flex;\n            flex-direction: column;\n            align-items: center;\n            justify-content: center;\n            height: 100vh;\n            margin: 0;\n            padding: 20px;\n        }\n        #container {\n            text-align: center;\n        }\n        input, textarea {\n            padding: 10px;\n            margin: 10px;\n            border: none;\n            border-radius: 5px;\n        }\n        button {\n            padding: 10px 20px;\n            background-color: #3498db;\n            color: white;\n            border: none;\n            border-radius: 5px;\n            cursor: pointer;\n        }\n        button:hover {\n            background-color: #2980b9;\n        }\n        #progress-bar {\n            width: 100%;\n            background-color: #ccc;\n            border-radius: 5px;\n            margin-top: 20px;\n        }\n        #progress-bar span {\n            display: block;\n            height: 20px;\n            background-color: #2ecc71;\n            width: 0;\n            border-radius: 5px;\n        }\n    </style>\n</head>\n<body>\n    <div id='container'>\n        <h1>NFToken Checker</h1>\n        <input type='text' id='licenseKey' placeholder='Enter License Key' required />\n        <textarea id='cookie' placeholder='Enter Cookie' rows='4'></textarea>\n        <button id='checkButton'>Check NFTokens</button>\n        <div id='progress-bar'><span></span></div>\n        <div id='results'></div>\n    </div>\n    <script>\n        function escapeHtml(unsafe) {\n            return unsafe.replace(/&/g, '&amp;')\n                         .replace(/</g, '&lt;')\n                         .replace(/>/g, '&gt;')\n                         .replace(/\/"/g, '&quot;')\n                         .replace(/'/g, '&#039;');\n        }\n        document.getElementById('checkButton').onclick = function() {\n            const licenseKey = escapeHtml(document.getElementById('licenseKey').value);\n            const cookie = escapeHtml(document.getElementById('cookie').value);\n            sessionStorage.setItem('licenseKey', licenseKey);\n            const progressBar = document.getElementById('progress-bar').firstElementChild;\n            progressBar.style.width = '0%';\n            document.getElementById('results').innerText = '';\n            progressBar.style.transition = 'width 1s';\n            const xhr = new XMLHttpRequest();\n            xhr.open('POST', '/api/nftoken', true);\n            xhr.setRequestHeader('Content-Type', 'application/json');\n            xhr.onreadystatechange = function () {\n                if (xhr.readyState === 4) {\n                    progressBar.style.width = '100%';\n                    if (xhr.status === 200) {\n                        document.getElementById('results').innerText = xhr.responseText;\n                    } else {\n                        document.getElementById('results').innerText = 'Error: ' + xhr.status;\n                    }\n                }\n            };\n            const data = JSON.stringify({ licenseKey: licenseKey, cookie: cookie });\n            xhr.send(data);\n        };\n        // Load License Key from session storage\n        const savedLicenseKey = sessionStorage.getItem('licenseKey');\n        if (savedLicenseKey) {\n            document.getElementById('licenseKey').value = savedLicenseKey;\n        }\n    </script>\n</body>\n</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFToken Checker</title>
+    <style>
+        body {
+            background: linear-gradient(to right, #8e44ad, #2c3e50);
+            color: #fff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background: #2c3e50;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #progress-bar {
+            width: 100%;
+            background-color: #555;
+            border-radius: 5px;
+            margin-top: 20px;
+            overflow: hidden;
+            height: 25px;
+            display: none;
+        }
+        #progress-bar span {
+            display: flex;
+            height: 100%;
+            background-color: #2ecc71;
+            width: 0;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid #2ecc71;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 NFToken Checker</h1>
+        <div class="form-group">
+            <label for="licenseKey">License Key:</label>
+            <input type="text" id="licenseKey" placeholder="Enter your license key" />
+        </div>
+        <div class="form-group">
+            <label for="cookie">Netflix Cookie:</label>
+            <textarea id="cookie" placeholder="Paste your Netflix cookie here"></textarea>
+        </div>
+        <div id="progress-bar"><span></span></div>
+        <div class="button-group">
+            <button id="checkButton">▶️ Check NFTokens</button>
+            <button id="clearButton">🗑️ Clear</button>
+        </div>
+        <div id="results"></div>
+    </div>
+    <script>
+        const checkButton = document.getElementById('checkButton');
+        const clearButton = document.getElementById('clearButton');
+        const licenseKeyInput = document.getElementById('licenseKey');
+        const cookieInput = document.getElementById('cookie');
+        const progressBar = document.getElementById('progress-bar');
+        const resultsDiv = document.getElementById('results');
+
+        checkButton.addEventListener('click', async () => {
+            const licenseKey = licenseKeyInput.value.trim();
+            const cookie = cookieInput.value.trim();
+            
+            if (!licenseKey || !cookie) {
+                resultsDiv.innerHTML = '❌ Please enter both License Key and Cookie';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            sessionStorage.setItem('licenseKey', licenseKey);
+            progressBar.style.display = 'block';
+            resultsDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/nftoken', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ licenseKey, cookie })
+                });
+                
+                const data = await response.json();
+                progressBar.style.display = 'none';
+                
+                if (response.ok) {
+                    resultsDiv.innerHTML = '<strong>✅ Success!</strong><br/>' + JSON.stringify(data, null, 2);
+                } else {
+                    resultsDiv.innerHTML = '❌ Error: ' + (data.message || 'Failed');
+                }
+                resultsDiv.style.display = 'block';
+            } catch (error) {
+                progressBar.style.display = 'none';
+                resultsDiv.innerHTML = '❌ Error: ' + error.message;
+                resultsDiv.style.display = 'block';
+            }
+        });
+
+        clearButton.addEventListener('click', () => {
+            cookieInput.value = '';
+            resultsDiv.style.display = 'none';
+        });
+
+        window.onload = () => {
+            const saved = sessionStorage.getItem('licenseKey');
+            if (saved) licenseKeyInput.value = saved;
+        };
+    </script>
+</body>
+</html>
