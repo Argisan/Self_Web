@@ -1,0 +1,207 @@
+#particles {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+}
+
+.auth-shell {
+  width: min(1120px, 94vw);
+  margin: 3rem auto;
+  display: grid;
+  grid-template-columns: 1fr 0.9fr;
+  gap: 1.2rem;
+}
+
+.auth-card,
+.auth-panel {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-card {
+  padding: 1.5rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-logo {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: var(--shadow-glow);
+}
+
+.brand h1 {
+  margin: 0.2rem 0 0;
+  font-size: 1.35rem;
+}
+
+.intro-copy {
+  margin-top: 1.2rem;
+}
+
+.intro-copy h2 {
+  margin: 0;
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+}
+
+.intro-copy p {
+  margin-top: 0.45rem;
+}
+
+.session-notice {
+  margin-top: 1rem;
+  border: 1px solid rgba(178, 87, 255, 0.4);
+  border-radius: var(--radius-md);
+  padding: 0.9rem;
+  background: rgba(112, 44, 163, 0.18);
+}
+
+.session-notice p {
+  margin: 0;
+}
+
+.session-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.login-form {
+  margin-top: 1.1rem;
+  display: grid;
+  gap: 0.95rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+label {
+  font-size: 0.9rem;
+  color: var(--silver);
+}
+
+input {
+  width: 100%;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-strong);
+  padding: 0.75rem 0.85rem;
+}
+
+input:focus-visible {
+  outline: 2px solid rgba(209, 141, 255, 0.36);
+  border-color: var(--purple);
+}
+
+.password-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.small-btn {
+  min-width: 72px;
+}
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.remember-row input {
+  width: auto;
+}
+
+.message {
+  margin: 0;
+  min-height: 1.3em;
+  font-size: 0.92rem;
+}
+
+.message.is-error {
+  color: var(--danger);
+}
+
+.message.is-success {
+  color: var(--success);
+}
+
+.auth-panel {
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 90% -10%, rgba(178, 87, 255, 0.22), transparent 40%),
+    var(--surface-strong);
+}
+
+.auth-panel h2 {
+  margin: 0.7rem 0;
+  font-size: clamp(1.25rem, 2.9vw, 1.8rem);
+}
+
+.panel-copy {
+  margin-top: 0;
+}
+
+.feature-list {
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--text-muted);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.credentials {
+  margin-top: 1rem;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.credentials span {
+  color: var(--silver);
+  font-size: 0.82rem;
+}
+
+.credentials strong {
+  color: var(--purple-bright);
+}
+
+@media (max-width: 980px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .auth-card,
+  .auth-panel {
+    padding: 1.15rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .session-actions {
+    flex-direction: column;
+  }
+
+  .small-btn {
+    min-width: 0;
+  }
+}
